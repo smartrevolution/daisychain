@@ -3,7 +3,6 @@ package main
 import (
 	"fmt"
 	"math/rand"
-	"runtime"
 	"sync"
 	"time"
 )
@@ -17,97 +16,134 @@ func (ev *Events) add(e Event) {
 
 type subscribers map[*Stream]interface{}
 
-func (subs subscribers) subscribe(s *Stream) {
-	subs[s] = struct{}{}
+func (s *Stream) subscribe(child *Stream) {
+	s.Lock()
+	defer s.Unlock()
+	s.subs[child] = struct{}{}
 }
 
-func (subs subscribers) unsubscribe(s *Stream) {
-	delete(subs, s)
-	close(s.pipe)
+func (s *Stream) unsubscribe(child *Stream) {
+	s.Lock()
+	defer s.Unlock()
+	delete(s.subs, child)
 }
 
-func (subs subscribers) publish(ev Event) {
-	for s := range subs {
-		s.pipe <- ev
+func (s *Stream) publish(ev Event) {
+	s.RLock()
+	defer s.RUnlock()
+	for child, _ := range s.subs {
+		child.Send(ev)
 	}
 }
 
 type Stream struct {
+	sync.RWMutex
 	in   chan Event
-	pipe chan Event
+	quit chan bool
 	subs subscribers
 }
 
-type EmitterFunc func(chan Event, *sync.WaitGroup)
+type EmitterFunc func(chan Event)
 
 func NewStream() *Stream {
-	var empty EmitterFunc = func(e chan Event, wg *sync.WaitGroup) {
-		wg.Done()
-	}
-	return NewStreamWith(empty)
-}
-
-func NewStreamWith(emitterfn EmitterFunc) *Stream {
-	in := make(chan Event)
-	pipe := make(chan Event)
-
 	s := &Stream{
-		in:   in,
-		pipe: pipe,
+		in:   make(chan Event),
+		quit: make(chan bool),
 		subs: make(subscribers),
 	}
 
-	var wg sync.WaitGroup
-	wg.Add(1)
 	go func() {
 		var events Events
+	Loop:
 		for {
 			select {
-			case ev := <-in:
+			case ev, ok := <-s.in:
+				if !ok {
+					break Loop
+				}
 				events.add(ev)
-				s.subs.publish(ev)
+				s.publish(ev)
+			case <-s.quit:
+				break Loop
 			}
 		}
 	}()
 
-	go emitterfn(in, &wg)
-	wg.Wait()
-
 	return s
+}
+
+func (s *Stream) Send(ev Event) {
+	s.in <- ev
+}
+
+func (s *Stream) Close() {
+	for child := range s.subs {
+		s.unsubscribe(child)
+		child.Close()
+	}
+	s.quit <- true
 }
 
 type MapFunc func(Event) Event
 
 func (s *Stream) Map(mapfn MapFunc) *Stream {
-	res := NewStream()
-	s.subs.subscribe(res)
+	res := &Stream{
+		in:   make(chan Event),
+		quit: make(chan bool),
+		subs: make(subscribers),
+	}
+
+	s.subscribe(res)
 
 	go func() {
-		for ev := range res.pipe {
-			res.in <- mapfn(ev)
+		var events Events
+	Loop:
+		for {
+			select {
+			case ev, ok := <-res.in:
+				if !ok {
+					break Loop
+				}
+				if ev != nil {
+					val := mapfn(ev)
+					events.add(val)
+					res.publish(val)
+				}
+			case <-res.quit:
+				break Loop
+			}
 		}
-
 	}()
+
 	return res
 }
 
 type ReduceFunc func(left, right Event) Event
 
 func (s *Stream) Reduce(reducefn ReduceFunc, init Event) *Stream {
-	res := NewStream()
-	s.subs.subscribe(res)
+	res := &Stream{
+		in:   make(chan Event),
+		quit: make(chan bool),
+		subs: make(subscribers),
+	}
 
-	runtime.SetFinalizer(res, func(s *Stream) {
-		s.subs.unsubscribe(s)
-	})
+	s.subscribe(res)
 
 	go func() {
-		value := init
+		val := init
+		var events Events
+	Loop:
 		for {
 			select {
-			case ev := <-res.pipe:
-				value = reducefn(value, ev)
-				res.in <- value
+			case ev, ok := <-res.in:
+				if !ok {
+					break Loop
+				}
+				val = reducefn(val, ev)
+				events.add(val)
+				res.publish(val)
+			case <-res.quit:
+				break Loop
 			}
 		}
 	}()
@@ -118,45 +154,58 @@ func (s *Stream) Reduce(reducefn ReduceFunc, init Event) *Stream {
 type FilterFunc func(Event) bool
 
 func (s *Stream) Filter(filterfn FilterFunc) *Stream {
-	res := NewStream()
-	s.subs.subscribe(res)
+	res := &Stream{
+		in:   make(chan Event),
+		quit: make(chan bool),
+		subs: make(subscribers),
+	}
+
+	s.subscribe(res)
 
 	go func() {
-		for ev := range res.pipe {
-			if filterfn(ev) {
-				res.in <- ev
+		var events Events
+	Loop:
+		for {
+			select {
+			case ev, ok := <-res.in:
+				if !ok {
+					break Loop
+				}
+				if filterfn(ev) {
+					events.add(ev)
+					res.publish(ev)
+				}
+			case <-res.quit:
+				break Loop
 			}
 		}
-
 	}()
 
 	return res
 }
 
-type SampleFunc func(Event)
+// type SampleFunc func(Event)
 
-func (s *Stream) Sample(samplefn SampleFunc) {
-	res := NewStream()
-	s.subs.subscribe(res)
+// func (s *Stream) Sample(samplefn SampleFunc) {
+// 	res := NewStream()
+// 	s.subscribe(res)
 
-	go func() {
-		for ev := range res.pipe {
-			samplefn(ev)
-		}
-	}()
-}
+// 	runtime.SetFinalizer(res, func(s *Stream) {
+// 		s.unsubscribe(s)
+// 		fmt.Println("FINALIZED")
+// 	})
 
-func main() {
-	s0 := NewStreamWith(func(out chan Event, wg *sync.WaitGroup) {
-		t := time.NewTicker(1 * time.Second)
-		wg.Done()
-		for {
-			select {
-			case _ = <-t.C:
-				out <- rand.Intn(10)
-			}
-		}
-	})
+// 	go func() {
+// 		for ev := range res.pipe {
+// 			samplefn(ev)
+// 		}
+// 	}()
+// }
+
+func setup() {
+
+	quit := make(chan bool)
+	s0 := NewStream()
 
 	s1 := s0.Map(func(ev Event) Event {
 		return ev.(int) * 2
@@ -166,22 +215,31 @@ func main() {
 		return left.(int) + right.(int)
 	}, 0)
 
-	s3 := s2.Filter(func(ev Event) bool {
+	_ = s2.Filter(func(ev Event) bool {
 		return ev.(int) > 50
 	})
 
-	s0.Sample(func(ev Event) {
-		fmt.Println("s0", ev)
-	})
-	s1.Sample(func(ev Event) {
-		fmt.Println("s1", ev)
-	})
-	s2.Sample(func(ev Event) {
-		fmt.Println("s2", ev)
-	})
-	s3.Sample(func(ev Event) {
-		fmt.Println("s3", ev)
-	})
+	emitter := func() {
+		t := time.NewTicker(10 * time.Millisecond)
+		for {
+			select {
+			case _ = <-t.C:
+				val := rand.Intn(10)
+				s0.Send(val)
+			case <-quit:
+				fmt.Println("Suicide")
+				return
+			}
+		}
+	}
 
-	time.Sleep(10 * time.Second)
+	go emitter()
+	time.Sleep(250 * time.Millisecond)
+	s0.Close()
+	quit <- true
+	time.Sleep(time.Second)
+}
+
+func main() {
+	setup()
 }
