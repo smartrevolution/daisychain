@@ -9,7 +9,6 @@ func Example() {
 	//GIVEN
 	s0 := NewStream()
 
-	//WHEN
 	s1 := s0.Map(func(ev Event) Event {
 		return ev.(int) * 2
 	})
@@ -22,6 +21,7 @@ func Example() {
 		return ev.(int) > 50
 	})
 
+	//WHEN
 	var wg sync.WaitGroup
 	wg.Add(1)
 	func() {
