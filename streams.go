@@ -29,7 +29,7 @@ func (s *Stream) publish(ev Event) {
 	s.RLock()
 	defer s.RUnlock()
 	for child, _ := range s.subs {
-		go child.Send(ev)
+		child.Send(ev)
 	}
 }
 
