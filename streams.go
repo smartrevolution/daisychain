@@ -36,7 +36,6 @@ func (s *Stream) publish(ev Event) {
 type Stream struct {
 	sync.RWMutex
 	in   chan Event
-	out  chan chan Event
 	quit chan bool
 	subs subscribers
 }
@@ -44,13 +43,10 @@ type Stream struct {
 func newStream() *Stream {
 	return &Stream{
 		in:   make(chan Event),
-		out:  make(chan chan Event),
 		quit: make(chan bool),
 		subs: make(subscribers),
 	}
 }
-
-type EmitterFunc func(chan Event)
 
 func NewStream() *Stream {
 	s := newStream()
@@ -65,11 +61,6 @@ func NewStream() *Stream {
 				}
 				events.add(ev)
 				s.publish(ev)
-			case out := <-s.out:
-				for _, ev := range events {
-					out <- ev
-				}
-				close(out)
 			case <-s.quit:
 				break Loop
 			}
@@ -89,16 +80,6 @@ func (s *Stream) Close() {
 		child.Close()
 	}
 	s.quit <- true
-}
-
-func (s *Stream) Events() Events {
-	var events Events
-	in := make(chan Event)
-	s.out <- in
-	for ev := range in {
-		events.add(ev)
-	}
-	return events
 }
 
 type MapFunc func(Event) Event
@@ -121,11 +102,6 @@ func (s *Stream) Map(mapfn MapFunc) *Stream {
 					events.add(val)
 					res.publish(val)
 				}
-			case out := <-res.out:
-				for _, ev := range events {
-					out <- ev
-				}
-				close(out)
 			case <-res.quit:
 				break Loop
 			}
@@ -156,11 +132,6 @@ func (s *Stream) Reduce(reducefn ReduceFunc, init Event) *Stream {
 					events.add(val)
 					res.publish(val)
 				}
-			case out := <-res.out:
-				for _, ev := range events {
-					out <- ev
-				}
-				close(out)
 			case <-res.quit:
 				break Loop
 			}
@@ -189,11 +160,6 @@ func (s *Stream) Filter(filterfn FilterFunc) *Stream {
 					events.add(ev)
 					res.publish(ev)
 				}
-			case out := <-res.out:
-				for _, ev := range events {
-					out <- ev
-				}
-				close(out)
 			case <-res.quit:
 				break Loop
 			}
@@ -203,26 +169,51 @@ func (s *Stream) Filter(filterfn FilterFunc) *Stream {
 	return res
 }
 
-type EventFunc func(Event)
+type Signal struct {
+	sync.RWMutex
+	parent     *Stream
+	events     Events
+	callbackfn CallbackFunc
+}
 
-func (s *Stream) OnEvent(eventfn EventFunc) *Stream {
-	res := newStream()
-	s.subscribe(res)
+func (s *Signal) Events() Events {
+	s.RLock()
+	defer s.RUnlock()
+	return s.events
+}
+
+type CallbackFunc func(Event)
+
+func (s *Signal) OnValue(callbackfn CallbackFunc) {
+	s.Lock()
+	defer s.Unlock()
+	s.callbackfn = callbackfn
+}
+
+func (s *Stream) Hold() *Signal {
+	res := &Signal{
+		parent: newStream(),
+	}
+	s.subscribe(res.parent)
 
 	go func() {
 	Loop:
 		for {
 			select {
-			case ev, ok := <-res.in:
+			case ev, ok := <-res.parent.in:
 				if !ok {
 					break Loop
 				}
-				go eventfn(ev)
-			case <-res.quit:
+				res.Lock()
+				res.events.add(ev)
+				res.Unlock()
+				if res.callbackfn != nil {
+					go res.callbackfn(ev)
+				}
+			case <-res.parent.quit:
 				break Loop
 			}
 		}
 	}()
-
 	return res
 }

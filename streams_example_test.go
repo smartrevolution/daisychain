@@ -3,6 +3,7 @@ package streams
 import (
 	"fmt"
 	"sync"
+	"time"
 )
 
 func Example() {
@@ -21,6 +22,11 @@ func Example() {
 		return ev.(int) > 50
 	})
 
+	n0 := s0.Hold()
+	n1 := s1.Hold()
+	n2 := s2.Hold()
+	n3 := s3.Hold()
+
 	//WHEN
 	var wg sync.WaitGroup
 	wg.Add(1)
@@ -31,12 +37,13 @@ func Example() {
 		wg.Done()
 	}()
 	wg.Wait()
+	time.Sleep(100 * time.Millisecond)
 
 	//THEN
-	fmt.Println(s0.Events()) //stream
-	fmt.Println(s1.Events()) //map
-	fmt.Println(s2.Events()) //reduce
-	fmt.Println(s3.Events()) //filter
+	fmt.Println(n0.Events()) //stream
+	fmt.Println(n1.Events()) //map
+	fmt.Println(n2.Events()) //reduce
+	fmt.Println(n3.Events()) //filter
 	s0.Close()
 
 	//Output:
