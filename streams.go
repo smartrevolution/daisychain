@@ -212,7 +212,9 @@ func (s *Signal) Find(filterfn FilterFunc) Events {
 	defer s.RUnlock()
 	var res Events
 	for ev := range s.events {
-		res.add(ev)
+		if filterfn(ev) {
+			res.add(ev)
+		}
 	}
 	return res
 }
