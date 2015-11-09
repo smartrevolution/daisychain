@@ -17,7 +17,34 @@ func xTestFinalizer(t *testing.T) {
 	}
 }
 
+func TestFind(t *testing.T) {
+	nums := numbers()
+
+	six, ok := nums.Get(func(ev Event) bool {
+		if ev.(int) == 6 {
+			return true
+		}
+		return false
+	})
+
+	if !ok {
+		t.Error(ok, six)
+	}
+
+	if six.(int) != 6 {
+		t.Error(six)
+	}
+}
+
 func ExampleStream() {
+	nums := numbers()
+	fmt.Println(nums.Events())
+
+	//Output:
+	//[0 1 2 3 4 5 6 7 8 9]
+}
+
+func numbers() *Signal {
 	s0 := NewStream()
 	numbers := s0.Hold()
 
@@ -31,8 +58,6 @@ func ExampleStream() {
 	}()
 	wg.Wait()
 	time.Sleep(100 * time.Millisecond)
-	fmt.Println(numbers.Events())
 
-	//Output:
-	//[0 1 2 3 4 5 6 7 8 9]
+	return numbers
 }

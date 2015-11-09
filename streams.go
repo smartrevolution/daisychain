@@ -211,7 +211,7 @@ func (s *Signal) Find(filterfn FilterFunc) Events {
 	s.RLock()
 	defer s.RUnlock()
 	var res Events
-	for ev := range s.events {
+	for _, ev := range s.events {
 		if filterfn(ev) {
 			res.add(ev)
 		}
