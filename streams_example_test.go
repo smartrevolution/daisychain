@@ -1,4 +1,4 @@
-package streams
+package daisychain
 
 import (
 	"fmt"
@@ -44,7 +44,6 @@ func Example() {
 	fmt.Println(n1.Events()) //map
 	fmt.Println(n2.Events()) //reduce
 	fmt.Println(n3.Events()) //filter
-	s0.Close()
 
 	//Output:
 	//[0 1 2 3 4 5 6 7 8 9]

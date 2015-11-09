@@ -1,6 +1,8 @@
-package streams
+package daisychain
 
 import (
+	"fmt"
+	"runtime"
 	"sync"
 )
 
@@ -48,6 +50,11 @@ func newStream() *Stream {
 	}
 }
 
+func finalizer(s *Stream) {
+	fmt.Println("Cleanup", s)
+	s.close()
+}
+
 func NewStream() *Stream {
 	s := newStream()
 	go func() {
@@ -67,6 +74,8 @@ func NewStream() *Stream {
 		}
 	}()
 
+	runtime.SetFinalizer(s, finalizer)
+
 	return s
 }
 
@@ -74,10 +83,10 @@ func (s *Stream) Send(ev Event) {
 	s.in <- ev
 }
 
-func (s *Stream) Close() {
+func (s *Stream) close() {
 	for child := range s.subs {
 		s.unsubscribe(child)
-		child.Close()
+		child.close()
 	}
 	s.quit <- true
 }

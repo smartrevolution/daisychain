@@ -1,10 +1,21 @@
-package streams
+package daisychain
 
 import (
 	"fmt"
+	"runtime"
 	"sync"
+	"testing"
 	"time"
 )
+
+func xTestFinalizer(t *testing.T) {
+	for i := 0; i < 3; i++ {
+		s0 := NewStream()
+		t.Log(s0)
+		time.Sleep(1 * time.Second)
+		runtime.GC()
+	}
+}
 
 func ExampleStream() {
 	s0 := NewStream()
@@ -24,5 +35,4 @@ func ExampleStream() {
 
 	//Output:
 	//[0 1 2 3 4 5 6 7 8 9]
-
 }
