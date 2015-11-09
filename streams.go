@@ -199,6 +199,24 @@ func (s *Signal) OnValue(callbackfn CallbackFunc) {
 	s.callbackfn = callbackfn
 }
 
+func (s *Signal) Get(filterfn FilterFunc) (Event, bool) {
+	events := s.Find(filterfn)
+	if ok := len(events) > 0; ok {
+		return events[0], ok
+	}
+	return nil, false
+}
+
+func (s *Signal) Find(filterfn FilterFunc) Events {
+	s.RLock()
+	defer s.RUnlock()
+	var res Events
+	for ev := range s.events {
+		res.add(ev)
+	}
+	return res
+}
+
 func (s *Stream) Hold() *Signal {
 	res := &Signal{
 		parent: newStream(),
