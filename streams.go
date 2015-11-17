@@ -2,6 +2,7 @@ package daisychain
 
 import (
 	"fmt"
+	"log"
 	"runtime"
 	"sync"
 )
@@ -12,6 +13,27 @@ type Events []Event
 func (ev *Events) add(e Event) {
 	*ev = append(*ev, e)
 }
+
+func (ev Events) indexof(e Event) (int, bool) {
+	return 0, true //FIXME: Find always the first element...
+}
+
+func remove(ev Event, events Events) Events {
+	if index, found := events.indexof(ev); found {
+		events = append(events[:index], events[index+1:]...) //FIXME: doesn't work on last element
+	} else {
+		log.Println("Warning: tried to remove no-existing event:", ev)
+	}
+	return events
+}
+
+// func (ev *Events) remove(e Event) {
+// 	if index, found := ev.indexof(e); found {
+// 		*ev = append(*ev[:index], *ev[index+1:]...) //FIXME: doesn't work on last element
+// 	} else {
+// 		log.Println("Warning: tried to remove no-existing event:", e)
+// 	}
+// }
 
 type subscribers map[*Stream]interface{}
 
@@ -35,18 +57,28 @@ func (s *Stream) publish(ev Event) {
 	}
 }
 
+func (s *Stream) propagate(events Events) {
+	s.RLock()
+	defer s.RUnlock()
+	for child, _ := range s.subs {
+		child.Recalculate(events)
+	}
+}
+
 type Stream struct {
 	sync.RWMutex
-	in   chan Event
-	quit chan bool
-	subs subscribers
+	in          chan Event
+	recalculate chan Events
+	quit        chan bool
+	subs        subscribers
 }
 
 func newStream() *Stream {
 	return &Stream{
-		in:   make(chan Event),
-		quit: make(chan bool),
-		subs: make(subscribers),
+		in:          make(chan Event),
+		recalculate: make(chan Events),
+		quit:        make(chan bool),
+		subs:        make(subscribers),
 	}
 }
 
@@ -68,6 +100,16 @@ func NewStream() *Stream {
 				}
 				events.add(ev)
 				s.publish(ev)
+			case ev, ok := <-s.recalculate:
+				if !ok {
+					break Loop
+				}
+
+				if ev != nil {
+					events = remove(ev, events)
+					events.add(ev)
+					s.propagate(events)
+				}
 			case <-s.quit:
 				break Loop
 			}
@@ -81,6 +123,10 @@ func NewStream() *Stream {
 
 func (s *Stream) Send(ev Event) {
 	s.in <- ev
+}
+
+func (s *Stream) Recalculate(events Events) {
+	s.recalculate <- events
 }
 
 func (s *Stream) close() {
@@ -106,10 +152,25 @@ func (s *Stream) Map(mapfn MapFunc) *Stream {
 				if !ok {
 					break Loop
 				}
+
 				if ev != nil {
 					val := mapfn(ev)
 					events.add(val)
 					res.publish(val)
+				}
+			case newEvents, ok := <-s.recalculate:
+				if !ok {
+					break Loop
+				}
+
+				if newEvents != nil {
+					var recalculation Events
+					for _, ev := range newEvents {
+						val := mapfn(ev)
+						recalculation.add(val)
+					}
+					events = recalculation
+					s.propagate(events)
 				}
 			case <-res.quit:
 				break Loop
@@ -136,10 +197,24 @@ func (s *Stream) Reduce(reducefn ReduceFunc, init Event) *Stream {
 				if !ok {
 					break Loop
 				}
+
 				if ev != nil {
 					val = reducefn(val, ev)
 					events.add(val)
 					res.publish(val)
+				}
+			case newEvents, ok := <-s.recalculate:
+				if !ok {
+					break Loop
+				}
+				if newEvents != nil {
+					var recalculation Events
+					for _, ev := range newEvents {
+						val = reducefn(val, ev)
+						recalculation.add(val)
+					}
+					events = recalculation
+					s.propagate(events)
 				}
 			case <-res.quit:
 				break Loop
@@ -168,6 +243,20 @@ func (s *Stream) Filter(filterfn FilterFunc) *Stream {
 				if ev != nil && filterfn(ev) {
 					events.add(ev)
 					res.publish(ev)
+				}
+			case newEvents, ok := <-s.recalculate:
+				if !ok {
+					break Loop
+				}
+				if newEvents != nil {
+					var recalculation Events
+					for _, ev := range newEvents {
+						if ev != nil && filterfn(ev) {
+							recalculation.add(ev)
+						}
+					}
+					events = recalculation
+					s.propagate(events)
 				}
 			case <-res.quit:
 				break Loop
