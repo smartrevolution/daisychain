@@ -125,6 +125,12 @@ func (s *Stream) Send(ev Event) {
 	s.in <- ev
 }
 
+func (s *Stream) Update(ev Event) {
+	var events Events
+	events.add(ev)
+	s.in <- events
+}
+
 func (s *Stream) Recalculate(events Events) {
 	s.recalculate <- events
 }
