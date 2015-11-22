@@ -27,14 +27,6 @@ func remove(ev Event, events Events) Events {
 	return events
 }
 
-// func (ev *Events) remove(e Event) {
-// 	if index, found := ev.indexof(e); found {
-// 		*ev = append(*ev[:index], *ev[index+1:]...) //FIXME: doesn't work on last element
-// 	} else {
-// 		log.Println("Warning: tried to remove no-existing event:", e)
-// 	}
-// }
-
 type subscribers map[*Stream]interface{}
 
 func (s *Stream) subscribe(child *Stream) {
@@ -107,7 +99,7 @@ func NewStream() *Stream {
 
 				if ev != nil {
 					events = remove(ev, events)
-					events.add(ev)
+					events.add(ev[0])
 					s.propagate(events)
 				}
 			case <-s.quit:
@@ -128,7 +120,7 @@ func (s *Stream) Send(ev Event) {
 func (s *Stream) Update(ev Event) {
 	var events Events
 	events.add(ev)
-	s.in <- events
+	s.Recalculate(events)
 }
 
 func (s *Stream) Recalculate(events Events) {
@@ -273,6 +265,48 @@ func (s *Stream) Filter(filterfn FilterFunc) *Stream {
 	return res
 }
 
+func (s *Stream) Hold() *Signal {
+	res := &Signal{
+		parent: newStream(),
+	}
+	s.subscribe(res.parent)
+
+	go func() {
+	Loop:
+		for {
+			select {
+			case ev, ok := <-res.parent.in:
+				if !ok {
+					break Loop
+				}
+				res.Lock()
+				res.events.add(ev)
+				res.Unlock()
+				if res.callbackfn != nil {
+					go res.callbackfn(ev)
+				}
+			case newEvents, ok := <-res.parent.recalculate:
+				if !ok {
+					break Loop
+				}
+				var lastEvent Event
+				if newEvents != nil {
+					res.Lock()
+					res.events = newEvents
+					lastEvent = res.events[len(res.events):]
+					res.Unlock()
+					if res.callbackfn != nil {
+						go res.callbackfn(lastEvent)
+					}
+				}
+			case <-res.parent.quit:
+				break Loop
+			}
+		}
+	}()
+	return res
+}
+
 type Signal struct {
 	sync.RWMutex
 	parent     *Stream
@@ -318,32 +352,4 @@ func (s *Signal) Last() Event {
 	s.RLock()
 	defer s.RUnlock()
 	return s.events[len(s.events)-1]
-}
-
-func (s *Stream) Hold() *Signal {
-	res := &Signal{
-		parent: newStream(),
-	}
-	s.subscribe(res.parent)
-
-	go func() {
-	Loop:
-		for {
-			select {
-			case ev, ok := <-res.parent.in:
-				if !ok {
-					break Loop
-				}
-				res.Lock()
-				res.events.add(ev)
-				res.Unlock()
-				if res.callbackfn != nil {
-					go res.callbackfn(ev)
-				}
-			case <-res.parent.quit:
-				break Loop
-			}
-		}
-	}()
-	return res
 }
