@@ -53,7 +53,7 @@ func (s *Stream) propagate(events Events) {
 	s.RLock()
 	defer s.RUnlock()
 	for child, _ := range s.subs {
-		child.Recalculate(events)
+		child.update(events)
 	}
 }
 
@@ -117,13 +117,14 @@ func (s *Stream) Send(ev Event) {
 	s.in <- ev
 }
 
+type KeyFunc func(Event) bool
+
 func (s *Stream) Update(ev Event) {
-	var events Events
-	events.add(ev)
-	s.Recalculate(events)
+	var events = []Event{ev}
+	s.update(events)
 }
 
-func (s *Stream) Recalculate(events Events) {
+func (s *Stream) update(events Events) {
 	s.recalculate <- events
 }
 
