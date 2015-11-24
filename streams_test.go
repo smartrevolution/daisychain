@@ -10,7 +10,7 @@ import (
 
 func xTestFinalizer(t *testing.T) {
 	for i := 0; i < 3; i++ {
-		s0 := NewStream()
+		s0 := NewSink()
 		t.Log(s0)
 		time.Sleep(1 * time.Second)
 		runtime.GC()
@@ -74,8 +74,8 @@ func ExampleStream_Update() {
 	//[2 3 4 5 6 7 8 9 10 11 12]
 }
 
-func numbers() (*Signal, *Stream) {
-	s0 := NewStream()
+func numbers() (*Signal, *Sink) {
+	s0 := NewSink()
 	numbers := s0.Hold()
 
 	var wg sync.WaitGroup

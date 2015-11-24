@@ -45,7 +45,7 @@ func (s *Stream) publish(ev Event) {
 	s.RLock()
 	defer s.RUnlock()
 	for child, _ := range s.subs {
-		child.Send(ev)
+		child.send(ev)
 	}
 }
 
@@ -65,6 +65,10 @@ type Stream struct {
 	subs        subscribers
 }
 
+type Sink struct {
+	*Stream
+}
+
 func newStream() *Stream {
 	return &Stream{
 		in:          make(chan Event),
@@ -74,13 +78,19 @@ func newStream() *Stream {
 	}
 }
 
-func finalizer(s *Stream) {
+func newSink() *Sink {
+	return &Sink{
+		Stream: newStream(),
+	}
+}
+
+func finalizer(s *Sink) {
 	fmt.Println("Cleanup", s)
 	s.close()
 }
 
-func NewStream() *Stream {
-	s := newStream()
+func NewSink() *Sink {
+	s := newSink()
 	go func() {
 		var events Events
 	Loop:
@@ -113,15 +123,19 @@ func NewStream() *Stream {
 	return s
 }
 
-func (s *Stream) Send(ev Event) {
+func (s *Sink) Send(ev Event) {
 	s.in <- ev
 }
 
 type KeyFunc func(Event) bool
 
-func (s *Stream) Update(ev Event) {
+func (s *Sink) Update(ev Event) {
 	var events = []Event{ev}
 	s.update(events)
+}
+
+func (s *Stream) send(ev Event) {
+	s.in <- ev
 }
 
 func (s *Stream) update(events Events) {
