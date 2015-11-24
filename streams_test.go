@@ -44,7 +44,7 @@ func ExampleStream() {
 	//[0 1 2 3 4 5 6 7 8 9]
 }
 
-func ExampleUpdate() {
+func ExampleStream_Update() {
 	sig, s0 := numbers()
 	fmt.Println(sig.Events())
 
