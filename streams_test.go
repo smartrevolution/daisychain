@@ -53,12 +53,26 @@ func ExampleStream_Update() {
 		wg.Done()
 	})
 	wg.Add(1)
-	s0.Update(10)
+	s0.Update(10, func(ev Event) bool {
+		if num, ok := ev.(int); ok {
+			if num == 0 {
+				return true
+			}
+		}
+		return false
+	})
 	wg.Wait()
 	fmt.Println(sig.Events())
 
 	wg.Add(1)
-	s0.Update(11)
+	s0.Update(11, func(ev Event) bool {
+		if num, ok := ev.(int); ok {
+			if num == 5 {
+				return true
+			}
+		}
+		return false
+	})
 	wg.Wait()
 	fmt.Println(sig.Events())
 
@@ -70,8 +84,8 @@ func ExampleStream_Update() {
 	//Output:
 	//[0 1 2 3 4 5 6 7 8 9]
 	//[1 2 3 4 5 6 7 8 9 10]
-	//[2 3 4 5 6 7 8 9 10 11]
-	//[2 3 4 5 6 7 8 9 10 11 12]
+	//[1 2 3 4 6 7 8 9 10 11]
+	//[1 2 3 4 6 7 8 9 10 11 12]
 }
 
 func numbers() (*Signal, *Sink) {

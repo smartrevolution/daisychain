@@ -10,19 +10,29 @@ import (
 type Event interface{}
 type Events []Event
 
-func (ev *Events) add(e Event) {
-	*ev = append(*ev, e)
+func (events *Events) add(ev Event) {
+	*events = append(*events, ev)
 }
 
-func (ev Events) indexof(e Event) (int, bool) {
-	return 0, true //FIXME: Find always the first element...
+func (events Events) find(keyfn KeyFunc) (int, bool) {
+	var found bool
+	var index int = -1
+	for i, event := range events {
+		if keyfn(event) {
+			found = true
+			index = i
+			break
+		}
+	}
+
+	return index, found
 }
 
-func remove(ev Event, events Events) Events {
-	if index, found := events.indexof(ev); found {
-		events = append(events[:index], events[index+1:]...) //FIXME: doesn't work on last element
+func remove(events Events, keyfn KeyFunc) Events {
+	if index, found := events.find(keyfn); found {
+		events = append(events[:index], events[index+1:]...)
 	} else {
-		log.Println("Warning: tried to remove no-existing event:", ev)
+		log.Println("Warning: No match for update")
 	}
 	return events
 }
@@ -65,8 +75,16 @@ type Stream struct {
 	subs        subscribers
 }
 
+type KeyFunc func(Event) bool
+
+type replacement struct {
+	newEvent Event
+	keyfn    KeyFunc
+}
+
 type Sink struct {
 	*Stream
+	recalculate chan replacement
 }
 
 func newStream() *Stream {
@@ -80,7 +98,8 @@ func newStream() *Stream {
 
 func newSink() *Sink {
 	return &Sink{
-		Stream: newStream(),
+		Stream:      newStream(),
+		recalculate: make(chan replacement),
 	}
 }
 
@@ -102,16 +121,23 @@ func NewSink() *Sink {
 				}
 				events.add(ev)
 				s.publish(ev)
-			case ev, ok := <-s.recalculate:
+			case rplmt, ok := <-s.recalculate:
 				if !ok {
 					break Loop
 				}
+				events = remove(events, rplmt.keyfn)
+				events.add(rplmt.newEvent)
+				s.propagate(events)
+			// case ev, ok := <-s.recalculate:
+			// 	if !ok {
+			// 		break Loop
+			// 	}
 
-				if ev != nil {
-					events = remove(ev, events)
-					events.add(ev[0])
-					s.propagate(events)
-				}
+			// 	if ev != nil {
+			// 		events = remove(ev, events)
+			// 		events.add(ev[0])
+			// 		s.propagate(events)
+			// 	}
 			case <-s.quit:
 				break Loop
 			}
@@ -127,11 +153,11 @@ func (s *Sink) Send(ev Event) {
 	s.in <- ev
 }
 
-type KeyFunc func(Event) bool
-
-func (s *Sink) Update(ev Event) {
-	var events = []Event{ev}
-	s.update(events)
+func (s *Sink) Update(ev Event, keyfn KeyFunc) {
+	s.recalculate <- replacement{
+		newEvent: ev,
+		keyfn:    keyfn,
+	}
 }
 
 func (s *Stream) send(ev Event) {
