@@ -392,5 +392,8 @@ func (s *Signal) Find(filterfn FilterFunc) Events {
 func (s *Signal) Last() Event {
 	s.RLock()
 	defer s.RUnlock()
-	return s.events[len(s.events)-1]
+	if l := len(s.events); l > 0 {
+		return s.events[l-1]
+	}
+	return struct{}{}
 }
