@@ -22,10 +22,10 @@ func Example() {
 		return ev.(int) > 50
 	})
 
-	n0 := s0.Hold()
-	n1 := s1.Hold()
-	n2 := s2.Hold()
-	n3 := s3.Hold()
+	n0 := s0.Hold(-1)
+	n1 := s1.Hold(-1)
+	n2 := s2.Hold(-1)
+	n3 := s3.Hold(-1)
 
 	//WHEN
 	var wg sync.WaitGroup

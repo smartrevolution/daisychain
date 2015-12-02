@@ -90,7 +90,7 @@ func ExampleStream_Update() {
 
 func numbers() (*Signal, *Sink) {
 	s0 := NewSink()
-	numbers := s0.Hold()
+	numbers := s0.Hold(-1)
 
 	var wg sync.WaitGroup
 	wg.Add(1)

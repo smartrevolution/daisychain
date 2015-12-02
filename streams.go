@@ -306,9 +306,10 @@ func (s *Stream) Filter(filterfn FilterFunc) *Stream {
 	return res
 }
 
-func (s *Stream) Hold() *Signal {
+func (s *Stream) Hold(initVal Event) *Signal {
 	res := &Signal{
-		parent: newStream(),
+		parent:  newStream(),
+		initVal: initVal,
 	}
 	s.subscribe(res.parent)
 
@@ -352,6 +353,7 @@ type Signal struct {
 	sync.RWMutex
 	parent     *Stream
 	events     Events
+	initVal    Event
 	callbackfn CallbackFunc
 }
 
@@ -395,5 +397,5 @@ func (s *Signal) Last() Event {
 	if l := len(s.events); l > 0 {
 		return s.events[l-1]
 	}
-	return struct{}{}
+	return s.initVal // if there is none, take initVal
 }
