@@ -17,6 +17,67 @@ func xTestFinalizer(t *testing.T) {
 	}
 }
 
+func TestUpdateableSink(t *testing.T) {
+	//GIVEN
+	sink := NewSink()
+	nums := sink.Hold(0)
+
+	add := sink.Reduce(func(left, right Event) Event {
+		if y, ok := right.(int); ok {
+			return left.(int) + y
+		}
+		return 0
+	}, 0)
+
+	//WHEN
+	sum := add.Hold(0)
+
+	var wg sync.WaitGroup
+	sum.OnValue(func(ev Event) {
+		wg.Done()
+	})
+
+	//THEN
+	if last := sum.Last(); last != 0 {
+		t.Error("Expected: 0, Got:", last)
+	}
+
+	//WHEN
+	wg.Add(1)
+	sink.Send(1)
+	wg.Wait()
+
+	//THEN
+	if last := sum.Last(); last != 1 {
+		t.Error("Expected: 1, Got:", last)
+	}
+
+	//WHEN
+	wg.Add(2)
+	sink.Send(2)
+	sink.Send(3)
+	wg.Wait()
+
+	t.Log(nums.Events())
+
+	//THEN
+	if last := sum.Last(); last != 6 {
+		t.Error("Expected: 6, Got:", last)
+	}
+
+	//WHEN
+	wg.Add(1)
+	sink.Update(4, func(ev Event) bool {
+		return ev.(int) == 3
+	})
+	wg.Wait()
+
+	//THEN
+	if sum.Last() != 7 {
+		t.Error(sum.Events())
+	}
+}
+
 func TestFind(t *testing.T) {
 	nums, _ := numbers()
 
@@ -44,7 +105,7 @@ func ExampleStream() {
 	//[0 1 2 3 4 5 6 7 8 9]
 }
 
-func ExampleStream_Update() {
+func ExampleStream_Update_int() {
 	sig, s0 := numbers()
 	fmt.Println(sig.Events())
 
@@ -86,6 +147,95 @@ func ExampleStream_Update() {
 	//[1 2 3 4 5 6 7 8 9 10]
 	//[1 2 3 4 6 7 8 9 10 11]
 	//[1 2 3 4 6 7 8 9 10 11 12]
+}
+
+type estimation struct {
+	key string
+	min int
+	max int
+}
+
+func (e estimation) String() string {
+	return fmt.Sprintf("%d-%d", e.min, e.max)
+}
+
+func ExampleStream_Update_struct() {
+	empty := estimation{
+		key: "k0",
+	}
+	estimations := NewSink()
+	add := estimations.Reduce(func(a, b Event) Event {
+		return estimation{
+			min: a.(estimation).min + b.(estimation).min,
+			max: a.(estimation).max + b.(estimation).max,
+		}
+	}, empty)
+	sum := add.Hold(empty)
+
+	var wg sync.WaitGroup
+	sum.OnValue(func(ev Event) {
+		wg.Done()
+	})
+
+	wg.Add(2)
+	estimations.Send(estimation{
+		key: "k1",
+		min: 1,
+		max: 2,
+	})
+	estimations.Send(estimation{
+		key: "k2",
+		min: 2,
+		max: 3,
+	})
+	wg.Wait()
+	fmt.Println(sum.Last())
+
+	wg.Add(1)
+	estimations.Update(estimation{
+		key: "k1",
+		min: 3,
+		max: 4,
+	}, func(ev Event) bool {
+		if est, ok := ev.(estimation); ok && est.key == "k1" {
+			return true
+		}
+		return false
+	})
+	wg.Wait()
+	fmt.Println(sum.Last())
+
+	// s0.Update(10, func(ev Event) bool {
+	// 	if num, ok := ev.(int); ok {
+	// 		if num == 0 {
+	// 			return true
+	// 		}
+	// 	}
+	// 	return false
+	// })
+	// wg.Wait()
+	// fmt.Println(sig.Events())
+
+	// wg.Add(1)
+	// s0.Update(11, func(ev Event) bool {
+	// 	if num, ok := ev.(int); ok {
+	// 		if num == 5 {
+	// 			return true
+	// 		}
+	// 	}
+	// 	return false
+	// })
+	// wg.Wait()
+	// fmt.Println(sig.Events())
+
+	// wg.Add(1)
+	// s0.Send(12)
+	// wg.Wait()
+	// fmt.Println(sig.Events())
+
+	//Output:
+	//3-5
+	//5-7
 }
 
 func numbers() (*Signal, *Sink) {

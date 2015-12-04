@@ -123,21 +123,12 @@ func NewSink() *Sink {
 				s.publish(ev)
 			case rplmt, ok := <-s.recalculate:
 				if !ok {
+					log.Println("Error recalc sink:", rplmt, ok)
 					break Loop
 				}
 				events = remove(events, rplmt.keyfn)
 				events.add(rplmt.newEvent)
 				s.propagate(events)
-			// case ev, ok := <-s.recalculate:
-			// 	if !ok {
-			// 		break Loop
-			// 	}
-
-			// 	if ev != nil {
-			// 		events = remove(ev, events)
-			// 		events.add(ev[0])
-			// 		s.propagate(events)
-			// 	}
 			case <-s.quit:
 				break Loop
 			}
@@ -197,7 +188,7 @@ func (s *Stream) Map(mapfn MapFunc) *Stream {
 					events.add(val)
 					res.publish(val)
 				}
-			case newEvents, ok := <-s.recalculate:
+			case newEvents, ok := <-res.recalculate:
 				if !ok {
 					break Loop
 				}
@@ -209,7 +200,7 @@ func (s *Stream) Map(mapfn MapFunc) *Stream {
 						recalculation.add(val)
 					}
 					events = recalculation
-					s.propagate(events)
+					res.propagate(events)
 				}
 			case <-res.quit:
 				break Loop
@@ -242,18 +233,19 @@ func (s *Stream) Reduce(reducefn ReduceFunc, init Event) *Stream {
 					events.add(val)
 					res.publish(val)
 				}
-			case newEvents, ok := <-s.recalculate:
+			case newEvents, ok := <-res.recalculate:
 				if !ok {
 					break Loop
 				}
 				if newEvents != nil {
+					val = init
 					var recalculation Events
 					for _, ev := range newEvents {
 						val = reducefn(val, ev)
 						recalculation.add(val)
 					}
 					events = recalculation
-					s.propagate(events)
+					res.propagate(events)
 				}
 			case <-res.quit:
 				break Loop
@@ -283,7 +275,7 @@ func (s *Stream) Filter(filterfn FilterFunc) *Stream {
 					events.add(ev)
 					res.publish(ev)
 				}
-			case newEvents, ok := <-s.recalculate:
+			case newEvents, ok := <-res.recalculate:
 				if !ok {
 					break Loop
 				}
@@ -295,7 +287,7 @@ func (s *Stream) Filter(filterfn FilterFunc) *Stream {
 						}
 					}
 					events = recalculation
-					s.propagate(events)
+					res.propagate(events)
 				}
 			case <-res.quit:
 				break Loop
