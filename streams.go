@@ -144,7 +144,7 @@ func (s *Sink) Send(ev Event) {
 	s.in <- ev
 }
 
-func (s *Sink) Update(ev Event, keyfn KeyFunc) {
+func (s *Sink) Update(keyfn KeyFunc, ev Event) {
 	s.recalculate <- replacement{
 		newEvent: ev,
 		keyfn:    keyfn,
