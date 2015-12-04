@@ -20,7 +20,6 @@ func xTestFinalizer(t *testing.T) {
 func TestUpdateableSink(t *testing.T) {
 	//GIVEN
 	sink := NewSink()
-	nums := sink.Hold(0)
 
 	add := sink.Reduce(func(left, right Event) Event {
 		if y, ok := right.(int); ok {
@@ -57,8 +56,6 @@ func TestUpdateableSink(t *testing.T) {
 	sink.Send(2)
 	sink.Send(3)
 	wg.Wait()
-
-	t.Log(nums.Events())
 
 	//THEN
 	if last := sum.Last(); last != 6 {
@@ -177,7 +174,7 @@ func ExampleStream_Update_struct() {
 		wg.Done()
 	})
 
-	wg.Add(2)
+	wg.Add(3)
 	estimations.Send(estimation{
 		key: "k1",
 		min: 1,
@@ -188,14 +185,19 @@ func ExampleStream_Update_struct() {
 		min: 2,
 		max: 3,
 	})
+	estimations.Send(estimation{
+		key: "k3",
+		min: 3,
+		max: 4,
+	})
 	wg.Wait()
 	fmt.Println(sum.Last())
 
 	wg.Add(1)
 	estimations.Update(estimation{
 		key: "k1",
-		min: 3,
-		max: 4,
+		min: 4,
+		max: 5,
 	}, func(ev Event) bool {
 		if est, ok := ev.(estimation); ok && est.key == "k1" {
 			return true
@@ -205,37 +207,24 @@ func ExampleStream_Update_struct() {
 	wg.Wait()
 	fmt.Println(sum.Last())
 
-	// s0.Update(10, func(ev Event) bool {
-	// 	if num, ok := ev.(int); ok {
-	// 		if num == 0 {
-	// 			return true
-	// 		}
-	// 	}
-	// 	return false
-	// })
-	// wg.Wait()
-	// fmt.Println(sig.Events())
-
-	// wg.Add(1)
-	// s0.Update(11, func(ev Event) bool {
-	// 	if num, ok := ev.(int); ok {
-	// 		if num == 5 {
-	// 			return true
-	// 		}
-	// 	}
-	// 	return false
-	// })
-	// wg.Wait()
-	// fmt.Println(sig.Events())
-
-	// wg.Add(1)
-	// s0.Send(12)
-	// wg.Wait()
-	// fmt.Println(sig.Events())
+	wg.Add(1)
+	estimations.Update(estimation{
+		key: "k3",
+		min: 5,
+		max: 6,
+	}, func(ev Event) bool {
+		if est, ok := ev.(estimation); ok && est.key == "k3" {
+			return true
+		}
+		return false
+	})
+	wg.Wait()
+	fmt.Println(sum.Last())
 
 	//Output:
-	//3-5
-	//5-7
+	//6-9
+	//9-12
+	//11-14
 }
 
 func numbers() (*Signal, *Sink) {
