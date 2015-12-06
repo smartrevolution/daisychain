@@ -10,7 +10,7 @@ import (
 
 func xTestFinalizer(t *testing.T) {
 	for i := 0; i < 3; i++ {
-		s0 := NewSink()
+		s0 := NewUpdateableSink()
 		t.Log(s0)
 		time.Sleep(1 * time.Second)
 		runtime.GC()
@@ -19,7 +19,7 @@ func xTestFinalizer(t *testing.T) {
 
 func TestUpdateableSink(t *testing.T) {
 	//GIVEN
-	sink := NewSink()
+	sink := NewUpdateableSink()
 
 	add := sink.Reduce(func(left, right Event) Event {
 		if y, ok := right.(int); ok {
@@ -160,7 +160,7 @@ func ExampleStream_Update_struct() {
 	empty := estimation{
 		key: "k0",
 	}
-	estimations := NewSink()
+	estimations := NewUpdateableSink()
 	add := estimations.Reduce(func(a, b Event) Event {
 		return estimation{
 			min: a.(estimation).min + b.(estimation).min,
@@ -227,8 +227,8 @@ func ExampleStream_Update_struct() {
 	//11-14
 }
 
-func numbers() (*Signal, *Sink) {
-	s0 := NewSink()
+func numbers() (*Signal, *UpdateableSink) {
+	s0 := NewUpdateableSink()
 	numbers := s0.Hold(-1)
 
 	var wg sync.WaitGroup

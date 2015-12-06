@@ -82,7 +82,7 @@ type replacement struct {
 	keyfn    KeyFunc
 }
 
-type Sink struct {
+type UpdateableSink struct {
 	*Stream
 	recalculate chan replacement
 }
@@ -96,19 +96,19 @@ func newStream() *Stream {
 	}
 }
 
-func newSink() *Sink {
-	return &Sink{
+func newSink() *UpdateableSink {
+	return &UpdateableSink{
 		Stream:      newStream(),
 		recalculate: make(chan replacement),
 	}
 }
 
-func finalizer(s *Sink) {
+func finalizer(s *UpdateableSink) {
 	fmt.Println("Cleanup", s)
 	s.close()
 }
 
-func NewSink() *Sink {
+func NewUpdateableSink() *UpdateableSink {
 	s := newSink()
 	go func() {
 		var events Events
@@ -140,11 +140,11 @@ func NewSink() *Sink {
 	return s
 }
 
-func (s *Sink) Send(ev Event) {
+func (s *UpdateableSink) Send(ev Event) {
 	s.in <- ev
 }
 
-func (s *Sink) Update(keyfn KeyFunc, ev Event) {
+func (s *UpdateableSink) Update(keyfn KeyFunc, ev Event) {
 	s.recalculate <- replacement{
 		newEvent: ev,
 		keyfn:    keyfn,

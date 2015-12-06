@@ -8,7 +8,7 @@ import (
 
 func Example() {
 	//GIVEN
-	s0 := NewSink()
+	s0 := NewUpdateableSink()
 
 	s1 := s0.Map(func(ev Event) Event {
 		return ev.(int) * 2
