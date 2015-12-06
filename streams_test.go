@@ -17,6 +17,27 @@ func xTestFinalizer(t *testing.T) {
 	}
 }
 
+func TestSink(t *testing.T) {
+	sink := NewSink()
+	signal := sink.Hold(0)
+
+	var wg sync.WaitGroup
+
+	signal.OnValue(func(ev Event) {
+		wg.Done()
+	})
+
+	wg.Add(3)
+	sink.Send(1)
+	sink.Send(2)
+	sink.Send(3)
+	wg.Wait()
+
+	if last := signal.Last(); last != 3 {
+		t.Error("Expected: 3, Got:", last)
+	}
+}
+
 func TestUpdateableSink(t *testing.T) {
 	//GIVEN
 	sink := NewUpdateableSink()

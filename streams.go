@@ -82,8 +82,12 @@ type replacement struct {
 	keyfn    KeyFunc
 }
 
-type UpdateableSink struct {
+type Sink struct {
 	*Stream
+}
+
+type UpdateableSink struct {
+	*Sink
 	recalculate chan replacement
 }
 
@@ -96,20 +100,53 @@ func newStream() *Stream {
 	}
 }
 
-func newSink() *UpdateableSink {
+func newSink() *Sink {
+	return &Sink{
+		Stream: newStream(),
+	}
+}
+
+func newUpdateableSink() *UpdateableSink {
 	return &UpdateableSink{
-		Stream:      newStream(),
+		Sink:        newSink(),
 		recalculate: make(chan replacement),
 	}
 }
 
-func finalizer(s *UpdateableSink) {
+func sinkFinalizer(s *Sink) {
 	fmt.Println("Cleanup", s)
 	s.close()
 }
 
-func NewUpdateableSink() *UpdateableSink {
+func updateableSinkFinalizer(s *UpdateableSink) {
+	fmt.Println("Cleanup", s)
+	s.close()
+}
+
+func NewSink() *Sink {
 	s := newSink()
+	go func() {
+	Loop:
+		for {
+			select {
+			case ev, ok := <-s.in:
+				if !ok {
+					break Loop
+				}
+				s.publish(ev)
+			case <-s.quit:
+				break Loop
+			}
+		}
+	}()
+
+	runtime.SetFinalizer(s, sinkFinalizer)
+
+	return s
+}
+
+func NewUpdateableSink() *UpdateableSink {
+	s := newUpdateableSink()
 	go func() {
 		var events Events
 	Loop:
@@ -135,12 +172,12 @@ func NewUpdateableSink() *UpdateableSink {
 		}
 	}()
 
-	runtime.SetFinalizer(s, finalizer)
+	runtime.SetFinalizer(s, updateableSinkFinalizer)
 
 	return s
 }
 
-func (s *UpdateableSink) Send(ev Event) {
+func (s *Sink) Send(ev Event) {
 	s.in <- ev
 }
 
