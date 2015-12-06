@@ -174,7 +174,6 @@ func (s *Stream) Map(mapfn MapFunc) *Stream {
 	s.subscribe(res)
 
 	go func() {
-		var events Events
 	Loop:
 		for {
 			select {
@@ -185,7 +184,6 @@ func (s *Stream) Map(mapfn MapFunc) *Stream {
 
 				if ev != nil {
 					val := mapfn(ev)
-					events.add(val)
 					res.publish(val)
 				}
 			case newEvents, ok := <-res.recalculate:
@@ -199,8 +197,7 @@ func (s *Stream) Map(mapfn MapFunc) *Stream {
 						val := mapfn(ev)
 						recalculation.add(val)
 					}
-					events = recalculation
-					res.propagate(events)
+					res.propagate(recalculation)
 				}
 			case <-res.quit:
 				break Loop
@@ -219,7 +216,6 @@ func (s *Stream) Reduce(reducefn ReduceFunc, init Event) *Stream {
 
 	go func() {
 		val := init
-		var events Events
 	Loop:
 		for {
 			select {
@@ -230,7 +226,6 @@ func (s *Stream) Reduce(reducefn ReduceFunc, init Event) *Stream {
 
 				if ev != nil {
 					val = reducefn(val, ev)
-					events.add(val)
 					res.publish(val)
 				}
 			case newEvents, ok := <-res.recalculate:
@@ -244,8 +239,7 @@ func (s *Stream) Reduce(reducefn ReduceFunc, init Event) *Stream {
 						val = reducefn(val, ev)
 						recalculation.add(val)
 					}
-					events = recalculation
-					res.propagate(events)
+					res.propagate(recalculation)
 				}
 			case <-res.quit:
 				break Loop
@@ -263,7 +257,6 @@ func (s *Stream) Filter(filterfn FilterFunc) *Stream {
 	s.subscribe(res)
 
 	go func() {
-		var events Events
 	Loop:
 		for {
 			select {
@@ -272,7 +265,6 @@ func (s *Stream) Filter(filterfn FilterFunc) *Stream {
 					break Loop
 				}
 				if ev != nil && filterfn(ev) {
-					events.add(ev)
 					res.publish(ev)
 				}
 			case newEvents, ok := <-res.recalculate:
@@ -286,8 +278,7 @@ func (s *Stream) Filter(filterfn FilterFunc) *Stream {
 							recalculation.add(ev)
 						}
 					}
-					events = recalculation
-					res.propagate(events)
+					res.propagate(recalculation)
 				}
 			case <-res.quit:
 				break Loop
