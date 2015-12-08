@@ -323,6 +323,44 @@ func (s *Stream) Filter(filterfn FilterFunc) *Stream {
 	return res
 }
 
+func (s *Stream) Merge(other *Stream) *Stream {
+	res := newStream()
+	s.subscribe(res)
+	other.subscribe(res)
+
+	go func() {
+	Loop:
+		for {
+			select {
+			case ev, ok := <-res.in:
+				if !ok {
+					break Loop
+				}
+				if ev != nil {
+					res.publish(ev)
+				}
+			case newEvents, ok := <-res.recalculate:
+				if !ok {
+					break Loop
+				}
+				if newEvents != nil {
+					var recalculation Events
+					for _, ev := range newEvents {
+						if ev != nil {
+							recalculation.add(ev)
+						}
+					}
+					res.propagate(recalculation)
+				}
+			case <-res.quit:
+				break Loop
+			}
+		}
+	}()
+
+	return res
+}
+
 func (s *Stream) Hold(initVal Event) *Signal {
 	res := &Signal{
 		parent:  newStream(),

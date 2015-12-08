@@ -248,6 +248,37 @@ func ExampleStream_Update_struct() {
 	//11-14
 }
 
+func ExampleStream_Merge() {
+	s0 := NewSink()
+	s1 := NewSink()
+
+	str0 := s0.Map(func(ev Event) Event {
+		return ev
+	})
+	str1 := s1.Map(func(ev Event) Event {
+		return ev
+	})
+
+	str2 := str0.Merge(str1)
+
+	var wg sync.WaitGroup
+
+	sig := str2.Hold(0)
+	sig.OnValue(func(ev Event) {
+		wg.Done()
+	})
+
+	wg.Add(2)
+	s0.Send(1)
+	s1.Send(2)
+	wg.Wait()
+
+	fmt.Println(sig.Events())
+
+	//Output:
+	//[2 1]
+}
+
 func ExampleStream_Filter() {
 	sink := NewSink()
 
