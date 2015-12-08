@@ -1,7 +1,6 @@
 package daisychain
 
 import (
-	"fmt"
 	"log"
 	"runtime"
 	"sync"
@@ -114,12 +113,10 @@ func newUpdateableSink() *UpdateableSink {
 }
 
 func sinkFinalizer(s *Sink) {
-	fmt.Println("Cleanup", s)
 	s.close()
 }
 
 func updateableSinkFinalizer(s *UpdateableSink) {
-	fmt.Println("Cleanup", s)
 	s.close()
 }
 

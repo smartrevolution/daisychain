@@ -248,6 +248,33 @@ func ExampleStream_Update_struct() {
 	//11-14
 }
 
+func ExampleStream_Filter() {
+	sink := NewSink()
+
+	evenNums := sink.Filter(func(ev Event) bool {
+		return ev.(int)%2 == 0
+	})
+
+	var wg sync.WaitGroup
+
+	sig := evenNums.Hold(0)
+	sig.OnValue(func(ev Event) {
+		wg.Done()
+	})
+
+	wg.Add(5)
+	for i := 0; i < 10; i++ {
+		sink.Send(i)
+	}
+	wg.Wait()
+
+	fmt.Println(sig.Events())
+
+	//Output:
+	//[0 2 4 6 8]
+
+}
+
 func numbers() (*Signal, *UpdateableSink) {
 	s0 := NewUpdateableSink()
 	numbers := s0.Hold(-1)
