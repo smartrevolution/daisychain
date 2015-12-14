@@ -146,22 +146,21 @@ func TestThrottle(t *testing.T) {
 		return ev
 	})
 	throttled := mapped.Throttle(10 * time.Millisecond)
+
 	signal := throttled.Hold(666)
 
-	//WHEN
-	sink.Send(1)
-	sink.Send(1)
-	time.Sleep(20 * time.Millisecond)
-	sink.Send(1)
-
 	signal.OnValue(func(ev Event) {
-		expected := []Event{1, 1}
-		if got, ok := ev.([]Event); !ok || len(got) != 2 {
+		expected := []Event{1, 1, 1}
+		if got, ok := ev.([]Event); !ok || len(got) != 3 {
 			t.Errorf("Expected %#v, Got: %#v", expected, got)
 		}
 	})
 
-	time.Sleep(20 * time.Millisecond)
+	//WHEN
+	sink.Send(1)
+	sink.Send(1)
+	sink.Send(1)
+	time.Sleep(15 * time.Millisecond)
 }
 
 func TestMerge(t *testing.T) {

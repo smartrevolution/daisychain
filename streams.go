@@ -244,37 +244,25 @@ func (s *Stream) Merge(other *Stream) *Stream {
 // Use type assertion
 // val, ok := ev.([]Event)
 // to get the collected events from a signal.
+// The result can be empty, when no events were received in the last interval.
 func (s *Stream) Throttle(d time.Duration) *Stream {
 	res := newStream()
 	s.subscribe(res)
 
-	now := func() time.Time {
-		return time.Now().UTC()
-	}
-
-	lastEvent := now()
-
-	shouldThrottle := func(last time.Time) bool {
-		threshold := last.Add(d).UTC()
-		return now().Before(threshold)
-	}
-
 	go func() {
+		ticker := time.NewTicker(d)
 		var events []Event
 	Loop:
 		for {
 			select {
+			case <-ticker.C:
+				res.publish(events)
+				events = []Event{}
 			case ev, ok := <-res.in:
 				if !ok {
 					break Loop
 				}
-				if shouldThrottle(lastEvent) {
-					events = append(events, ev)
-				} else {
-					lastEvent = now()
-					res.publish(events)
-					events = []Event{}
-				}
+				events = append(events, ev)
 			case <-res.quit:
 				break Loop
 			}
