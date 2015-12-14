@@ -42,10 +42,12 @@ type Error struct {
 	msg string
 }
 
+// NewErrorEvent creates a new Event of type Error
 func NewErrorEvent(msg string) Event {
 	return Error{msg: msg}
 }
 
+// Stream is a stream.
 type Stream struct {
 	sync.RWMutex
 	in   chan Event
@@ -53,10 +55,12 @@ type Stream struct {
 	subs subscribers
 }
 
+// Sink is the first node of a stream.
 type Sink struct {
 	*Stream
 }
 
+// newStream is a constructor for streams.
 func newStream() *Stream {
 	return &Stream{
 		in:   make(chan Event),
@@ -65,16 +69,19 @@ func newStream() *Stream {
 	}
 }
 
+// newSink is a helper constructor for sinks.
 func newSink() *Sink {
 	return &Sink{
 		Stream: newStream(),
 	}
 }
 
+// If the runtime discards a Sink, all depending streams are discarded , too.
 func sinkFinalizer(s *Sink) {
 	s.close()
 }
 
+// NewSink generates a new Sink.
 func NewSink() *Sink {
 	s := newSink()
 	go func() {
@@ -97,14 +104,17 @@ func NewSink() *Sink {
 	return s
 }
 
+// Send sends an Event from a Sink down the stream
 func (s *Sink) Send(ev Event) {
 	s.in <- ev
 }
 
+// send sends an Event down the stream.
 func (s *Stream) send(ev Event) {
 	s.in <- ev
 }
 
+// close will unsubscribe all childs recursively.
 func (s *Stream) close() {
 	s.quit <- true
 	for child := range s.subs {
@@ -113,8 +123,10 @@ func (s *Stream) close() {
 	}
 }
 
+// MapFunc is the function signature used by Map.
 type MapFunc func(Event) Event
 
+// Map passes the return value of its MapFunc down the stream.
 func (s *Stream) Map(mapfn MapFunc) *Stream {
 	res := newStream()
 	s.subscribe(res)
@@ -141,8 +153,10 @@ func (s *Stream) Map(mapfn MapFunc) *Stream {
 	return res
 }
 
+//ReduceFunc is the function signature used by Reduce().
 type ReduceFunc func(left, right Event) Event
 
+// Reduce accumulates the passed events. It starts with the init Event.
 func (s *Stream) Reduce(reducefn ReduceFunc, init Event) *Stream {
 	res := newStream()
 	s.subscribe(res)
@@ -170,8 +184,10 @@ func (s *Stream) Reduce(reducefn ReduceFunc, init Event) *Stream {
 	return res
 }
 
+// FilterFunc is the function signature used by Filter().
 type FilterFunc func(Event) bool
 
+// Filter only fires en event, when the FilterFunc returns true.
 func (s *Stream) Filter(filterfn FilterFunc) *Stream {
 	res := newStream()
 	s.subscribe(res)
@@ -196,6 +212,9 @@ func (s *Stream) Filter(filterfn FilterFunc) *Stream {
 	return res
 }
 
+// Merge merges two streams into one stream.
+// Merge fires an event each time either of
+// the input streams fires an event.
 func (s *Stream) Merge(other *Stream) *Stream {
 	res := newStream()
 	s.subscribe(res)
@@ -221,7 +240,10 @@ func (s *Stream) Merge(other *Stream) *Stream {
 	return res
 }
 
-// Throttle collects events and returns them every d time durations
+// Throttle collects events and returns them every d time durations.
+// Use type assertion
+// val, ok := ev.([]Event)
+// to get the collected events from a signal.
 func (s *Stream) Throttle(d time.Duration) *Stream {
 	res := newStream()
 	s.subscribe(res)
@@ -262,6 +284,7 @@ func (s *Stream) Throttle(d time.Duration) *Stream {
 	return res
 }
 
+// Hold generates a Signal from a stream.
 func (s *Stream) Hold(initVal Event) *Signal {
 	res := &Signal{
 		parent:  newStream(),
@@ -293,6 +316,7 @@ func (s *Stream) Hold(initVal Event) *Signal {
 	return res
 }
 
+// Signal is a value that changes over time.
 type Signal struct {
 	sync.RWMutex
 	parent      *Stream
@@ -302,6 +326,7 @@ type Signal struct {
 	callbackfn  CallbackFunc
 }
 
+// Value returns the current value of the Signal.
 func (s *Signal) Value() Event {
 	s.RLock()
 	defer s.RUnlock()
@@ -311,8 +336,11 @@ func (s *Signal) Value() Event {
 	return s.initVal
 }
 
+// CallbackFunc is the function signature used by OnValue().
 type CallbackFunc func(Event)
 
+// OnValue registers a callback function that is called each time
+// the Signal is updated.
 func (s *Signal) OnValue(callbackfn CallbackFunc) {
 	s.Lock()
 	defer s.Unlock()
