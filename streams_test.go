@@ -10,10 +10,47 @@ import (
 
 func xTestFinalizer(t *testing.T) {
 	for i := 0; i < 3; i++ {
-		s0 := NewUpdateableSink()
+		s0 := NewSink()
 		t.Log(s0)
 		time.Sleep(1 * time.Second)
 		runtime.GC()
+	}
+}
+
+func xTestClose(t *testing.T) {
+	//GIVEN
+	parent := newStream()
+	child := newStream()
+
+	//WHEN
+	parent.subscribe(child)
+	parent.close()
+
+	//THEN
+	if l := len(parent.subs); l != 0 {
+		t.Error("Expected 0, Got:", l)
+	}
+}
+
+func TestSubscribers(t *testing.T) {
+	//GIVEN
+	parent := newStream()
+	child := newStream()
+
+	//WHEN
+	parent.subscribe(child)
+
+	//THEN
+	if l := len(parent.subs); l != 1 {
+		t.Error("Expected 1, Got:", l)
+	}
+
+	//WHEN
+	parent.unsubscribe(child)
+
+	//THEN
+	if l := len(parent.subs); l != 0 {
+		t.Error("Expected 0, Got:", l)
 	}
 }
 
@@ -21,150 +58,98 @@ func TestSink(t *testing.T) {
 	sink := NewSink()
 	signal := sink.Hold(0)
 
-	var wg sync.WaitGroup
+	send0to9(sink)
 
-	signal.OnValue(func(ev Event) {
-		wg.Done()
-	})
-
-	wg.Add(3)
-	sink.Send(1)
-	sink.Send(2)
-	sink.Send(3)
-	wg.Wait()
-
-	if last := signal.Last(); last != 3 {
-		t.Error("Expected: 3, Got:", last)
+	if val := signal.Value(); val != 9 {
+		t.Error("Expected: 9, Got:", val)
 	}
 }
 
-func TestUpdateableSink(t *testing.T) {
-	//GIVEN
-	sink := NewUpdateableSink()
+func TestMap(t *testing.T) {
+	sink := NewSink()
 
-	add := sink.Reduce(func(left, right Event) Event {
-		if y, ok := right.(int); ok {
-			return left.(int) + y
-		}
-		return 0
+	squared := sink.Map(func(ev Event) Event {
+		return ev.(int) * ev.(int)
+	})
+
+	signal := squared.Hold(0)
+
+	send0to9(sink)
+
+	if val := signal.Value(); val != 81 {
+		t.Error("Expected: 81, Got:", val)
+	}
+}
+
+func TestReduce(t *testing.T) {
+	sink := NewSink()
+
+	squared := sink.Reduce(func(a, b Event) Event {
+		return a.(int) + b.(int)
+	}, 100)
+
+	signal := squared.Hold(0)
+
+	send0to9(sink)
+
+	if val := signal.Value(); val != 145 {
+		t.Error("Expected: 145, Got:", val)
+	}
+}
+
+func TestFilter(t *testing.T) {
+	sink := NewSink()
+
+	evenNums := sink.Filter(func(ev Event) bool {
+		return ev.(int)%2 == 0
+	})
+
+	signal := evenNums.Hold(0)
+
+	send0to9(sink)
+
+	if val := signal.Value(); val != 8 {
+		t.Error("Expected: 8, Got:", val)
+	}
+}
+
+func TestMerge(t *testing.T) {
+	s0 := NewSink()
+	s1 := NewSink()
+
+	map0 := s0.Map(func(ev Event) Event {
+		return ev
+	})
+	map1 := s1.Map(func(ev Event) Event {
+		return ev
+	})
+
+	merged := map0.Merge(map1)
+	added := merged.Reduce(func(a, b Event) Event {
+		return a.(int) + b.(int)
 	}, 0)
 
-	//WHEN
-	sum := add.Hold(0)
-
 	var wg sync.WaitGroup
-	sum.OnValue(func(ev Event) {
-		wg.Done()
-	})
 
-	//THEN
-	if last := sum.Last(); last != 0 {
-		t.Error("Expected: 0, Got:", last)
-	}
-
-	//WHEN
-	wg.Add(1)
-	sink.Send(1)
-	wg.Wait()
-
-	//THEN
-	if last := sum.Last(); last != 1 {
-		t.Error("Expected: 1, Got:", last)
-	}
-
-	//WHEN
-	wg.Add(2)
-	sink.Send(2)
-	sink.Send(3)
-	wg.Wait()
-
-	//THEN
-	if last := sum.Last(); last != 6 {
-		t.Error("Expected: 6, Got:", last)
-	}
-
-	//WHEN
-	wg.Add(1)
-	sink.Update(func(ev Event) bool {
-		return ev.(int) == 3
-	}, 4)
-	wg.Wait()
-
-	//THEN
-	if sum.Last() != 7 {
-		t.Error(sum.Events())
-	}
-}
-
-func TestFind(t *testing.T) {
-	nums, _ := numbers()
-
-	six, ok := nums.Get(func(ev Event) bool {
-		if ev.(int) == 6 {
-			return true
-		}
-		return false
-	})
-
-	if !ok {
-		t.Error(ok, six)
-	}
-
-	if six.(int) != 6 {
-		t.Error(six)
-	}
-}
-
-func ExampleStream() {
-	nums, _ := numbers()
-	fmt.Println(nums.Events())
-
-	//Output:
-	//[0 1 2 3 4 5 6 7 8 9]
-}
-
-func ExampleStream_Update_int() {
-	sig, s0 := numbers()
-	fmt.Println(sig.Events())
-
-	var wg sync.WaitGroup
+	sig := merged.Hold(0)
 	sig.OnValue(func(ev Event) {
 		wg.Done()
 	})
-	wg.Add(1)
-	s0.Update(func(ev Event) bool {
-		if num, ok := ev.(int); ok {
-			if num == 0 {
-				return true
-			}
-		}
-		return false
-	}, 10)
-	wg.Wait()
-	fmt.Println(sig.Events())
 
-	wg.Add(1)
-	s0.Update(func(ev Event) bool {
-		if num, ok := ev.(int); ok {
-			if num == 5 {
-				return true
-			}
-		}
-		return false
-	}, 11)
-	wg.Wait()
-	fmt.Println(sig.Events())
+	sum := added.Hold(0)
 
-	wg.Add(1)
-	s0.Send(12)
+	wg.Add(4)
+	s0.Send(1)
+	s1.Send(2)
+	s1.Send(3)
+	s0.Send(4)
 	wg.Wait()
-	fmt.Println(sig.Events())
 
-	//Output:
-	//[0 1 2 3 4 5 6 7 8 9]
-	//[1 2 3 4 5 6 7 8 9 10]
-	//[1 2 3 4 6 7 8 9 10 11]
-	//[1 2 3 4 6 7 8 9 10 11 12]
+	time.Sleep(10 * time.Millisecond)
+
+	if last := sum.Value(); last != 10 {
+		t.Error("Expected: 10, Got:", last)
+	}
 }
 
 type estimation struct {
@@ -177,11 +162,11 @@ func (e estimation) String() string {
 	return fmt.Sprintf("%d-%d", e.min, e.max)
 }
 
-func ExampleStream_Update_struct() {
+func TestReduceWithStruct(t *testing.T) {
 	empty := estimation{
 		key: "k0",
 	}
-	estimations := NewUpdateableSink()
+	estimations := NewSink()
 	add := estimations.Reduce(func(a, b Event) Event {
 		return estimation{
 			min: a.(estimation).min + b.(estimation).min,
@@ -212,110 +197,28 @@ func ExampleStream_Update_struct() {
 		max: 4,
 	})
 	wg.Wait()
-	fmt.Println(sum.Last())
-
-	wg.Add(1)
-	estimations.Update(func(ev Event) bool {
-		if est, ok := ev.(estimation); ok && est.key == "k1" {
-			return true
-		}
-		return false
-	}, estimation{
-		key: "k1",
-		min: 4,
-		max: 5,
-	})
-	wg.Wait()
-	fmt.Println(sum.Last())
-
-	wg.Add(1)
-	estimations.Update(func(ev Event) bool {
-		if est, ok := ev.(estimation); ok && est.key == "k3" {
-			return true
-		}
-		return false
-	}, estimation{
-		key: "k3",
-		min: 5,
-		max: 6,
-	})
-	wg.Wait()
-	fmt.Println(sum.Last())
-
-	//Output:
-	//6-9
-	//9-12
-	//11-14
+	time.Sleep(50 * time.Millisecond)
+	if est := sum.Value().(estimation); est.min != 6 && est.max != 9 {
+		t.Error("Expected: 6-9, Got:", est)
+	}
 }
 
-func TestMerge(t *testing.T) {
-	s0 := NewSink()
-	s1 := NewSink()
-
-	map0 := s0.Map(func(ev Event) Event {
-		return ev
-	})
-	map1 := s1.Map(func(ev Event) Event {
-		return ev
-	})
-
-	merged := map0.Merge(map1)
-	added := merged.Reduce(func(a, b Event) Event {
-		return a.(int) + b.(int)
-	}, 0)
-
+func send0to9(s *Sink) {
 	var wg sync.WaitGroup
-
-	sig := merged.Hold(0)
-	sig.OnValue(func(ev Event) {
+	wg.Add(1)
+	func() {
+		for i := 0; i < 10; i++ {
+			s.Send(i)
+		}
 		wg.Done()
-	})
-
-	sum := added.Hold(0)
-
-	wg.Add(3)
-	s0.Send(1)
-	s1.Send(2)
-	s1.Send(3)
+	}()
 	wg.Wait()
-
 	time.Sleep(10 * time.Millisecond)
-
-	if last := sum.Last(); last != 6 {
-		t.Error("Expected: 6, Got:", last)
-	}
 }
 
-func ExampleStream_Filter() {
-	sink := NewSink()
-
-	evenNums := sink.Filter(func(ev Event) bool {
-		return ev.(int)%2 == 0
-	})
-
-	var wg sync.WaitGroup
-
-	sig := evenNums.Hold(0)
-	sig.OnValue(func(ev Event) {
-		wg.Done()
-	})
-
-	wg.Add(5)
-	for i := 0; i < 10; i++ {
-		sink.Send(i)
-	}
-	wg.Wait()
-
-	fmt.Println(sig.Events())
-
-	//Output:
-	//[0 2 4 6 8]
-
-}
-
-func numbers() (*Signal, *UpdateableSink) {
-	s0 := NewUpdateableSink()
-	numbers := s0.Hold(-1)
+func numbers() (*Signal, *Sink) {
+	s0 := NewSink()
+	numbers := s0.Hold(0)
 
 	var wg sync.WaitGroup
 	wg.Add(1)
@@ -326,7 +229,7 @@ func numbers() (*Signal, *UpdateableSink) {
 		wg.Done()
 	}()
 	wg.Wait()
-	time.Sleep(100 * time.Millisecond)
+	time.Sleep(10 * time.Millisecond)
 
 	return numbers, s0
 }

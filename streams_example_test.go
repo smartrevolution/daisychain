@@ -40,15 +40,15 @@ func Example() {
 	time.Sleep(100 * time.Millisecond)
 
 	//THEN
-	fmt.Println(n0.Events()) //stream
-	fmt.Println(n1.Events()) //map
-	fmt.Println(n2.Events()) //reduce
-	fmt.Println(n3.Events()) //filter
+	fmt.Println(n0.Value()) //stream = 0..9
+	fmt.Println(n1.Value()) //map = 9 * 2 = 18
+	fmt.Println(n2.Value()) //reduce = sum(0..9)
+	fmt.Println(n3.Value()) //filter = max(sum(0..9)), when > 50
 
 	//Output:
-	//[0 1 2 3 4 5 6 7 8 9]
-	//[0 2 4 6 8 10 12 14 16 18]
-	//[0 2 6 12 20 30 42 56 72 90]
-	//[56 72 90]
+	// 9
+	// 18
+	// 90
+	// 90
 
 }
