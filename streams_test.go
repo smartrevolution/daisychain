@@ -137,6 +137,33 @@ func TestFilter(t *testing.T) {
 	}
 }
 
+func TestThrottle(t *testing.T) {
+	t.Parallel()
+
+	//GIVEN
+	sink := NewSink()
+	mapped := sink.Map(func(ev Event) Event {
+		return ev
+	})
+	throttled := mapped.Throttle(10 * time.Millisecond)
+	signal := throttled.Hold(666)
+
+	//WHEN
+	sink.Send(1)
+	sink.Send(1)
+	time.Sleep(20 * time.Millisecond)
+	sink.Send(1)
+
+	signal.OnValue(func(ev Event) {
+		expected := []Event{1, 1}
+		if got, ok := ev.([]Event); !ok || len(got) != 2 {
+			t.Errorf("Expected %#v, Got: %#v", expected, got)
+		}
+	})
+
+	time.Sleep(20 * time.Millisecond)
+}
+
 func TestMerge(t *testing.T) {
 	t.Parallel()
 
@@ -210,7 +237,7 @@ func TestErrorHandling(t *testing.T) {
 	time.Sleep(10 * time.Millisecond)
 
 	//THEN
-	if val := signal.Value(); val != empty {
+	if val, ok := signal.Value().(Empty); ok && val != empty {
 		t.Errorf("Expected: %#v, Got: %#v", empty, val)
 	}
 

@@ -3,6 +3,7 @@ package daisychain
 import (
 	"runtime"
 	"sync"
+	"time"
 )
 
 type Event interface{}
@@ -210,6 +211,47 @@ func (s *Stream) Merge(other *Stream) *Stream {
 				}
 				if ev != nil {
 					res.publish(ev)
+				}
+			case <-res.quit:
+				break Loop
+			}
+		}
+	}()
+
+	return res
+}
+
+// Throttle collects events and returns them every d time durations
+func (s *Stream) Throttle(d time.Duration) *Stream {
+	res := newStream()
+	s.subscribe(res)
+
+	now := func() time.Time {
+		return time.Now().UTC()
+	}
+
+	lastEvent := now()
+
+	shouldThrottle := func(last time.Time) bool {
+		threshold := last.Add(d).UTC()
+		return now().Before(threshold)
+	}
+
+	go func() {
+		var events []Event
+	Loop:
+		for {
+			select {
+			case ev, ok := <-res.in:
+				if !ok {
+					break Loop
+				}
+				if shouldThrottle(lastEvent) {
+					events = append(events, ev)
+				} else {
+					lastEvent = now()
+					res.publish(events)
+					events = []Event{}
 				}
 			case <-res.quit:
 				break Loop
