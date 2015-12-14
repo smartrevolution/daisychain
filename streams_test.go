@@ -18,12 +18,15 @@ func xTestFinalizer(t *testing.T) {
 }
 
 func xTestClose(t *testing.T) {
+	t.Parallel()
 	//GIVEN
 	parent := newStream()
 	child := newStream()
+	time.Sleep(50 * time.Millisecond)
 
 	//WHEN
 	parent.subscribe(child)
+	time.Sleep(50 * time.Millisecond)
 	parent.close()
 
 	//THEN
@@ -33,6 +36,7 @@ func xTestClose(t *testing.T) {
 }
 
 func TestSubscribers(t *testing.T) {
+	t.Parallel()
 	//GIVEN
 	parent := newStream()
 	child := newStream()
@@ -55,17 +59,25 @@ func TestSubscribers(t *testing.T) {
 }
 
 func TestSink(t *testing.T) {
+	t.Parallel()
+
+	//GIVEN
 	sink := NewSink()
 	signal := sink.Hold(0)
 
+	//WHEN
 	send0to9(sink)
 
+	//THEN
 	if val := signal.Value(); val != 9 {
 		t.Error("Expected: 9, Got:", val)
 	}
 }
 
 func TestMap(t *testing.T) {
+	t.Parallel()
+
+	//GIVEN
 	sink := NewSink()
 
 	squared := sink.Map(func(ev Event) Event {
@@ -74,14 +86,19 @@ func TestMap(t *testing.T) {
 
 	signal := squared.Hold(0)
 
+	//WHEN
 	send0to9(sink)
 
+	//THEN
 	if val := signal.Value(); val != 81 {
 		t.Error("Expected: 81, Got:", val)
 	}
 }
 
 func TestReduce(t *testing.T) {
+	t.Parallel()
+
+	//GIVEN
 	sink := NewSink()
 
 	squared := sink.Reduce(func(a, b Event) Event {
@@ -90,14 +107,19 @@ func TestReduce(t *testing.T) {
 
 	signal := squared.Hold(0)
 
+	//WHEN
 	send0to9(sink)
 
+	//THEN
 	if val := signal.Value(); val != 145 {
 		t.Error("Expected: 145, Got:", val)
 	}
 }
 
 func TestFilter(t *testing.T) {
+	t.Parallel()
+
+	//GIVEN
 	sink := NewSink()
 
 	evenNums := sink.Filter(func(ev Event) bool {
@@ -106,14 +128,19 @@ func TestFilter(t *testing.T) {
 
 	signal := evenNums.Hold(0)
 
+	//WHEN
 	send0to9(sink)
 
+	//THEN
 	if val := signal.Value(); val != 8 {
 		t.Error("Expected: 8, Got:", val)
 	}
 }
 
 func TestMerge(t *testing.T) {
+	t.Parallel()
+
+	//GIVEN
 	s0 := NewSink()
 	s1 := NewSink()
 
@@ -129,6 +156,7 @@ func TestMerge(t *testing.T) {
 		return a.(int) + b.(int)
 	}, 0)
 
+	//WHEN
 	var wg sync.WaitGroup
 
 	sig := merged.Hold(0)
@@ -147,9 +175,54 @@ func TestMerge(t *testing.T) {
 
 	time.Sleep(10 * time.Millisecond)
 
+	//THEN
 	if last := sum.Value(); last != 10 {
 		t.Error("Expected: 10, Got:", last)
 	}
+}
+
+func TestErrorHandling(t *testing.T) {
+	t.Parallel()
+
+	//GIVEN
+	sink := NewSink()
+
+	//WHEN
+	signal := sink.Hold(666)
+
+	//THEN
+	if val := signal.Value(); val != 666 {
+		t.Error("Expected: 666, Got:", val)
+	}
+
+	//WHEN
+	sink.Send(1)
+	time.Sleep(10 * time.Millisecond)
+
+	//THEN
+	if val := signal.Value(); val != 1 {
+		t.Error("Expected: 1, Got:", val)
+	}
+
+	//WHEN
+	empty := NewEmptyEvent()
+	sink.Send(empty)
+	time.Sleep(10 * time.Millisecond)
+
+	//THEN
+	if val := signal.Value(); val != empty {
+		t.Errorf("Expected: %#v, Got: %#v", empty, val)
+	}
+
+	//WHEN
+	sink.Send(NewErrorEvent("errormsg"))
+	time.Sleep(10 * time.Millisecond)
+
+	//THEN
+	if val, ok := signal.Value().(Error); !ok {
+		t.Error("Expected: anError, Got:", val)
+	}
+
 }
 
 type estimation struct {
@@ -163,6 +236,9 @@ func (e estimation) String() string {
 }
 
 func TestReduceWithStruct(t *testing.T) {
+	t.Parallel()
+
+	//GIVEN
 	empty := estimation{
 		key: "k0",
 	}
@@ -175,6 +251,7 @@ func TestReduceWithStruct(t *testing.T) {
 	}, empty)
 	sum := add.Hold(empty)
 
+	//WHEN
 	var wg sync.WaitGroup
 	sum.OnValue(func(ev Event) {
 		wg.Done()
@@ -198,6 +275,8 @@ func TestReduceWithStruct(t *testing.T) {
 	})
 	wg.Wait()
 	time.Sleep(50 * time.Millisecond)
+
+	//THEN
 	if est := sum.Value().(estimation); est.min != 6 && est.max != 9 {
 		t.Error("Expected: 6-9, Got:", est)
 	}
@@ -214,22 +293,4 @@ func send0to9(s *Sink) {
 	}()
 	wg.Wait()
 	time.Sleep(10 * time.Millisecond)
-}
-
-func numbers() (*Signal, *Sink) {
-	s0 := NewSink()
-	numbers := s0.Hold(0)
-
-	var wg sync.WaitGroup
-	wg.Add(1)
-	func() {
-		for i := 0; i < 10; i++ {
-			s0.Send(i)
-		}
-		wg.Done()
-	}()
-	wg.Wait()
-	time.Sleep(10 * time.Millisecond)
-
-	return numbers, s0
 }

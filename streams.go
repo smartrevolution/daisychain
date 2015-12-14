@@ -29,6 +29,22 @@ func (s *Stream) publish(ev Event) {
 	}
 }
 
+type Empty struct {
+}
+
+func NewEmptyEvent() Event {
+	return Empty{}
+}
+
+type Error struct {
+	Event
+	msg string
+}
+
+func NewErrorEvent(msg string) Event {
+	return Error{msg: msg}
+}
+
 type Stream struct {
 	sync.RWMutex
 	in   chan Event
@@ -89,11 +105,11 @@ func (s *Stream) send(ev Event) {
 }
 
 func (s *Stream) close() {
+	s.quit <- true
 	for child := range s.subs {
 		s.unsubscribe(child)
 		child.close()
 	}
-	s.quit <- true
 }
 
 type MapFunc func(Event) Event
@@ -207,6 +223,7 @@ func (s *Stream) Merge(other *Stream) *Stream {
 func (s *Stream) Hold(initVal Event) *Signal {
 	res := &Signal{
 		parent:  newStream(),
+		event:   NewEmptyEvent(),
 		initVal: initVal,
 	}
 	s.subscribe(res.parent)
@@ -220,6 +237,7 @@ func (s *Stream) Hold(initVal Event) *Signal {
 					break Loop
 				}
 				res.Lock()
+				res.initialized = true
 				res.event = ev
 				res.Unlock()
 				if res.callbackfn != nil {
@@ -235,17 +253,20 @@ func (s *Stream) Hold(initVal Event) *Signal {
 
 type Signal struct {
 	sync.RWMutex
-	parent     *Stream
-	event      Event
-	initVal    Event
-	callbackfn CallbackFunc
+	parent      *Stream
+	event       Event
+	initVal     Event
+	initialized bool
+	callbackfn  CallbackFunc
 }
 
 func (s *Signal) Value() Event {
 	s.RLock()
 	defer s.RUnlock()
-	//return s.initVal // if there is none, take initVal
-	return s.event
+	if s.initialized {
+		return s.event
+	}
+	return s.initVal
 }
 
 type CallbackFunc func(Event)
