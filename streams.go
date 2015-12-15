@@ -175,7 +175,7 @@ func (s *Stream) Map(mapfn MapFunc) *Stream {
 }
 
 //ReduceFunc is the function signature used by Reduce().
-type ReduceFunc func(left, right Event) Event
+type ReduceFunc func(*Stream, Event, Event) Event
 
 // Reduce accumulates the passed events. It starts with the init Event.
 func (s *Stream) Reduce(reducefn ReduceFunc, init Event) *Stream {
@@ -193,7 +193,7 @@ func (s *Stream) Reduce(reducefn ReduceFunc, init Event) *Stream {
 				}
 
 				if ev != nil {
-					val = reducefn(val, ev)
+					val = reducefn(s, val, ev)
 					res.publish(val)
 				}
 			case <-res.quit:
@@ -206,7 +206,7 @@ func (s *Stream) Reduce(reducefn ReduceFunc, init Event) *Stream {
 }
 
 // FilterFunc is the function signature used by Filter().
-type FilterFunc func(Event) bool
+type FilterFunc func(*Stream, Event) bool
 
 // Filter only fires en event, when the FilterFunc returns true.
 func (s *Stream) Filter(filterfn FilterFunc) *Stream {
@@ -221,7 +221,7 @@ func (s *Stream) Filter(filterfn FilterFunc) *Stream {
 				if !ok {
 					break Loop
 				}
-				if ev != nil && filterfn(ev) {
+				if ev != nil && filterfn(s, ev) {
 					res.publish(ev)
 				}
 			case <-res.quit:
@@ -307,7 +307,7 @@ func (s *Stream) Condition(filterfn FilterFunc, callbackfn CallbackFunc) *Stream
 				if !ok {
 					break Loop
 				}
-				if filterfn != nil && filterfn(ev) {
+				if filterfn != nil && filterfn(s, ev) {
 					go callbackfn(ev)
 				}
 			case <-res.quit:

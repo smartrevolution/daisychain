@@ -14,11 +14,11 @@ func Example() {
 		return ev.(int) * 2
 	})
 
-	s2 := s1.Reduce(func(left, right Event) Event {
+	s2 := s1.Reduce(func(s *Stream, left, right Event) Event {
 		return left.(int) + right.(int)
 	}, 0)
 
-	s3 := s2.Filter(func(ev Event) bool {
+	s3 := s2.Filter(func(s *Stream, ev Event) bool {
 		return ev.(int) > 50
 	})
 

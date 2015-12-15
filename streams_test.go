@@ -124,7 +124,7 @@ func TestReduce(t *testing.T) {
 	//GIVEN
 	sink := NewSink()
 
-	squared := sink.Reduce(func(a, b Event) Event {
+	squared := sink.Reduce(func(s *Stream, a, b Event) Event {
 		return a.(int) + b.(int)
 	}, 100)
 
@@ -145,7 +145,7 @@ func TestFilter(t *testing.T) {
 	//GIVEN
 	sink := NewSink()
 
-	evenNums := sink.Filter(func(ev Event) bool {
+	evenNums := sink.Filter(func(s *Stream, ev Event) bool {
 		return ev.(int)%2 == 0
 	})
 
@@ -175,7 +175,7 @@ func TestMerge(t *testing.T) {
 	})
 
 	merged := map0.Merge(map1)
-	added := merged.Reduce(func(a, b Event) Event {
+	added := merged.Reduce(func(s *Stream, a, b Event) Event {
 		return a.(int) + b.(int)
 	}, 0)
 
@@ -241,7 +241,7 @@ func TestCondition(t *testing.T) {
 	})
 
 	//THEN
-	_ = mapped.Condition(func(ev Event) bool {
+	_ = mapped.Condition(func(s *Stream, ev Event) bool {
 		return ev.(int) == 2
 	}, func(ev Event) {
 		if ev.(int) != 2 {
@@ -357,7 +357,7 @@ func TestReduceWithStruct(t *testing.T) {
 		key: "k0",
 	}
 	estimations := NewSink()
-	add := estimations.Reduce(func(a, b Event) Event {
+	add := estimations.Reduce(func(s *Stream, a, b Event) Event {
 		return estimation{
 			min: a.(estimation).min + b.(estimation).min,
 			max: a.(estimation).max + b.(estimation).max,
