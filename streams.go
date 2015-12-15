@@ -293,6 +293,8 @@ func (s *Stream) Throttle(d time.Duration) *Stream {
 	return res
 }
 
+// Condition only fires for events, where FilterFunc returns true,
+// if so, it will then call CallbackFunc on that event.
 func (s *Stream) Condition(filterfn FilterFunc, callbackfn CallbackFunc) *Stream {
 	res := newStream()
 	s.subscribe(res)
@@ -318,6 +320,7 @@ func (s *Stream) Condition(filterfn FilterFunc, callbackfn CallbackFunc) *Stream
 }
 
 // Hold generates a Signal from a stream.
+// The signal always holds the last event from the stream.
 func (s *Stream) Hold(initVal Event) *Signal {
 	res := &Signal{
 		parent:  newStream(),
@@ -341,6 +344,76 @@ func (s *Stream) Hold(initVal Event) *Signal {
 				if res.callbackfn != nil {
 					go res.callbackfn(ev)
 				}
+			case <-res.parent.quit:
+				break Loop
+			}
+		}
+	}()
+	return res
+}
+
+// Accu accumulates all events from a stream.
+// It appends these events internally to an []Event,
+// which it also passes to the CallbackFunc any time
+// a new event arrives.
+func (s *Stream) Accu() *Signal {
+	res := &Signal{
+		parent:      newStream(),
+		event:       []Event{},
+		initialized: true,
+	}
+	s.subscribe(res.parent)
+
+	go func() {
+	Loop:
+		for {
+			select {
+			case ev, ok := <-res.parent.in:
+				if !ok {
+					break Loop
+				}
+				res.Lock()
+				res.event = append(res.event.([]Event), ev)
+				if res.callbackfn != nil {
+					go res.callbackfn(res.event)
+				}
+				res.Unlock()
+			case <-res.parent.quit:
+				break Loop
+			}
+		}
+	}()
+	return res
+}
+
+type KeyFunc func(ev Event) string
+type group map[string][]Event
+
+// Group accumulates all events under the string key
+// that is returned by applying KeyFunc to the event.
+func (s *Stream) Group(keyfn KeyFunc) *Signal {
+	res := &Signal{
+		parent:      newStream(),
+		event:       make(group),
+		initialized: true,
+	}
+	s.subscribe(res.parent)
+
+	go func() {
+	Loop:
+		for {
+			select {
+			case ev, ok := <-res.parent.in:
+				if !ok {
+					break Loop
+				}
+				res.Lock()
+				key := keyfn(ev)
+				(res.event.(group))[key] = append(res.event.(group)[key], ev)
+				if res.callbackfn != nil {
+					go res.callbackfn(res.event)
+				}
+				res.Unlock()
 			case <-res.parent.quit:
 				break Loop
 			}

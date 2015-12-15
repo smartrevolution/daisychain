@@ -256,6 +256,45 @@ func TestCondition(t *testing.T) {
 	time.Sleep(15 * time.Millisecond)
 }
 
+func TestAccu(t *testing.T) {
+	t.Parallel()
+
+	//GIVEN
+	sink := NewSink()
+	signal := sink.Accu()
+
+	//WHEN
+	send0to9(sink)
+
+	//THEN
+	expected := []Event{0, 1, 2, 3, 4, 5, 6, 7, 8, 9}
+	if val := signal.Value().([]Event); len(val) != len(expected) {
+		t.Errorf("Expected: %#v, Got: %#v", expected, val)
+	}
+}
+
+func TestGroup(t *testing.T) {
+	t.Parallel()
+
+	//GIVEN
+	sink := NewSink()
+	signal := sink.Group(func(ev Event) string {
+		if ev.(int)%2 == 0 {
+			return "even"
+		}
+		return "odd"
+	})
+
+	//WHEN
+	send0to9(sink)
+
+	//THEN
+	if evenOdd, ok := signal.Value().(group); !ok || len(evenOdd) != 2 {
+		t.Log(signal.Value())
+		t.Errorf("Expected: map[even:[0 2 4 6 8] odd:[1 3 5 7 9]], Got: %#v", evenOdd)
+	}
+}
+
 func TestErrorHandling(t *testing.T) {
 	t.Parallel()
 
