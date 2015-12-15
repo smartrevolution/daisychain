@@ -58,6 +58,8 @@ type Stream struct {
 
 func (s *Stream) SetVar(name string, value interface{}) {
 	//FIXME: Mutex makes another test blocked?! WTF??!?
+	// As long as no var is set outside of a stream method
+	// no when gets hurt. But still I need to fix it!
 	//s.Lock()
 	//defer s.Unlock()
 	s.vars[name] = value
@@ -282,6 +284,30 @@ func (s *Stream) Throttle(d time.Duration) *Stream {
 					break Loop
 				}
 				events = append(events, ev)
+			case <-res.quit:
+				break Loop
+			}
+		}
+	}()
+
+	return res
+}
+
+func (s *Stream) Condition(filterfn FilterFunc, callbackfn CallbackFunc) *Stream {
+	res := newStream()
+	s.subscribe(res)
+
+	go func() {
+	Loop:
+		for {
+			select {
+			case ev, ok := <-res.in:
+				if !ok {
+					break Loop
+				}
+				if filterfn != nil && filterfn(ev) {
+					go callbackfn(ev)
+				}
 			case <-res.quit:
 				break Loop
 			}

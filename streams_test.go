@@ -160,32 +160,6 @@ func TestFilter(t *testing.T) {
 	}
 }
 
-func TestThrottle(t *testing.T) {
-	t.Parallel()
-
-	//GIVEN
-	sink := NewSink()
-	mapped := sink.Map(func(s *Stream, ev Event) Event {
-		return ev
-	})
-	throttled := mapped.Throttle(10 * time.Millisecond)
-
-	signal := throttled.Hold(666)
-
-	signal.OnValue(func(ev Event) {
-		expected := []Event{1, 1, 1}
-		if got, ok := ev.([]Event); !ok || len(got) != 3 {
-			t.Errorf("Expected %#v, Got: %#v", expected, got)
-		}
-	})
-
-	//WHEN
-	sink.Send(1)
-	sink.Send(1)
-	sink.Send(1)
-	time.Sleep(15 * time.Millisecond)
-}
-
 func TestMerge(t *testing.T) {
 	t.Parallel()
 
@@ -228,6 +202,58 @@ func TestMerge(t *testing.T) {
 	if last := sum.Value(); last != 10 {
 		t.Error("Expected: 10, Got:", last)
 	}
+}
+
+func TestThrottle(t *testing.T) {
+	t.Parallel()
+
+	//GIVEN
+	sink := NewSink()
+	mapped := sink.Map(func(s *Stream, ev Event) Event {
+		return ev
+	})
+	throttled := mapped.Throttle(10 * time.Millisecond)
+
+	signal := throttled.Hold(666)
+
+	//THEN
+	signal.OnValue(func(ev Event) {
+		expected := []Event{1, 1, 1}
+		if got, ok := ev.([]Event); !ok || len(got) != 3 {
+			t.Errorf("Expected %#v, Got: %#v", expected, got)
+		}
+	})
+
+	//WHEN
+	sink.Send(1)
+	sink.Send(1)
+	sink.Send(1)
+	time.Sleep(15 * time.Millisecond)
+}
+
+func TestCondition(t *testing.T) {
+	t.Parallel()
+
+	//GIVEN
+	sink := NewSink()
+	mapped := sink.Map(func(s *Stream, ev Event) Event {
+		return ev
+	})
+
+	//THEN
+	_ = mapped.Condition(func(ev Event) bool {
+		return ev.(int) == 2
+	}, func(ev Event) {
+		if ev.(int) != 2 {
+			t.Error("Expected: 2, Got:", ev)
+		}
+	})
+
+	//WHEN
+	sink.Send(1)
+	sink.Send(2)
+	sink.Send(3)
+	time.Sleep(15 * time.Millisecond)
 }
 
 func TestErrorHandling(t *testing.T) {
