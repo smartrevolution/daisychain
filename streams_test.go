@@ -207,6 +207,72 @@ func TestMerge(t *testing.T) {
 	}
 }
 
+// func TestThrottle(t *testing.T) {
+// 	t.Parallel()
+
+// 	//GIVEN
+// 	sink := NewSink()
+// 	mapped := sink.Map(func(s *Stream, ev Event) Event {
+// 		return ev
+// 	})
+// 	throttled := mapped.Throttle(10 * time.Millisecond)
+
+// 	signal := throttled.Hold(666)
+
+// 	//THEN
+// 	signal.OnValue(func(ev Event) {
+// 		expected := []Event{1, 1, 1}
+// 		if got, ok := ev.([]Event); !ok || len(got) != 3 {
+// 			t.Errorf("Expected %#v, Got: %#v", expected, got)
+// 		}
+// 	})
+
+// 	//WHEN
+// 	sink.Send(1)
+// 	sink.Send(1)
+// 	sink.Send(1)
+// 	time.Sleep(15 * time.Millisecond)
+// }
+
+func TestAccu(t *testing.T) {
+	t.Parallel()
+
+	//GIVEN
+	sink := NewSink()
+	signal := sink.Accu()
+
+	//WHEN
+	send0to9(sink)
+
+	//THEN
+	expected := []Event{0, 1, 2, 3, 4, 5, 6, 7, 8, 9}
+	if val := signal.Value().([]Event); len(val) != len(expected) {
+		t.Errorf("Expected: %#v, Got: %#v", expected, val)
+	}
+}
+
+func TestGroup(t *testing.T) {
+	t.Parallel()
+
+	//GIVEN
+	sink := NewSink()
+	signal := sink.Group(func(ev Event) string {
+		if ev.(int)%2 == 0 {
+			return "even"
+		}
+		return "odd"
+	})
+
+	//WHEN
+	send0to9(sink)
+
+	//THEN
+	if evenOdd, ok := signal.Value().(group); !ok || len(evenOdd) != 2 {
+		t.Log(signal.Value())
+		t.Errorf("Expected: map[even:[0 2 4 6 8] odd:[1 3 5 7 9]], Got: %#v", evenOdd)
+	}
+}
+
 func TestErrorHandling(t *testing.T) {
 	t.Parallel()
 
