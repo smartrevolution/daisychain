@@ -58,6 +58,29 @@ func TestSubscribers(t *testing.T) {
 	}
 }
 
+func TestVars(t *testing.T) {
+	t.Parallel()
+
+	//GIVEN
+	sink := NewSink()
+	mapped := sink.Map(func(s *Stream, ev Event) Event {
+		s.SetVar("count", s.Var("count", 0).(int)+1)
+		return ev
+	})
+	signal := mapped.Hold(0)
+
+	//WHEN
+	send0to9(sink)
+
+	//THEN
+	if val := signal.Value(); val != 9 {
+		t.Error("Expected: 9, Got:", val)
+	}
+	if count := sink.Var("count", 666); count != 10 {
+		t.Error("Expected: 10, Got:", count)
+	}
+}
+
 func TestSink(t *testing.T) {
 	t.Parallel()
 
@@ -80,7 +103,7 @@ func TestMap(t *testing.T) {
 	//GIVEN
 	sink := NewSink()
 
-	squared := sink.Map(func(ev Event) Event {
+	squared := sink.Map(func(s *Stream, ev Event) Event {
 		return ev.(int) * ev.(int)
 	})
 
@@ -142,7 +165,7 @@ func TestThrottle(t *testing.T) {
 
 	//GIVEN
 	sink := NewSink()
-	mapped := sink.Map(func(ev Event) Event {
+	mapped := sink.Map(func(s *Stream, ev Event) Event {
 		return ev
 	})
 	throttled := mapped.Throttle(10 * time.Millisecond)
@@ -170,10 +193,10 @@ func TestMerge(t *testing.T) {
 	s0 := NewSink()
 	s1 := NewSink()
 
-	map0 := s0.Map(func(ev Event) Event {
+	map0 := s0.Map(func(s *Stream, ev Event) Event {
 		return ev
 	})
-	map1 := s1.Map(func(ev Event) Event {
+	map1 := s1.Map(func(s *Stream, ev Event) Event {
 		return ev
 	})
 

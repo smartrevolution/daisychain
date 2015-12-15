@@ -53,6 +53,24 @@ type Stream struct {
 	in   chan Event
 	quit chan bool
 	subs subscribers
+	vars map[string]interface{}
+}
+
+func (s *Stream) SetVar(name string, value interface{}) {
+	//FIXME: Mutex makes another test blocked?! WTF??!?
+	//s.Lock()
+	//defer s.Unlock()
+	s.vars[name] = value
+}
+
+func (s *Stream) Var(name string, init interface{}) (value interface{}) {
+	s.RLock()
+	defer s.RUnlock()
+	value, exists := s.vars[name]
+	if !exists {
+		value = init
+	}
+	return
 }
 
 // Sink is the first node of a stream.
@@ -66,6 +84,7 @@ func newStream() *Stream {
 		in:   make(chan Event),
 		quit: make(chan bool),
 		subs: make(subscribers),
+		vars: make(map[string]interface{}),
 	}
 }
 
@@ -124,7 +143,7 @@ func (s *Stream) close() {
 }
 
 // MapFunc is the function signature used by Map.
-type MapFunc func(Event) Event
+type MapFunc func(*Stream, Event) Event
 
 // Map passes the return value of its MapFunc down the stream.
 func (s *Stream) Map(mapfn MapFunc) *Stream {
@@ -141,7 +160,7 @@ func (s *Stream) Map(mapfn MapFunc) *Stream {
 				}
 
 				if ev != nil {
-					val := mapfn(ev)
+					val := mapfn(s, ev)
 					res.publish(val)
 				}
 			case <-res.quit:

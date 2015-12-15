@@ -10,7 +10,7 @@ func Example() {
 	//GIVEN
 	s0 := NewSink()
 
-	s1 := s0.Map(func(ev Event) Event {
+	s1 := s0.Map(func(s *Stream, ev Event) Event {
 		return ev.(int) * 2
 	})
 
