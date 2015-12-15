@@ -26,6 +26,16 @@ func Example() {
 	n1 := s1.Hold(-1)
 	n2 := s2.Hold(-1)
 	n3 := s3.Hold(-1)
+	n4 := s3.Accu()
+
+	keyfn := func(ev Event) string {
+		if ev.(int)%2 == 0 {
+			return "even"
+		}
+		return "odd"
+	}
+
+	n5 := s1.Group(keyfn)
 
 	//WHEN
 	var wg sync.WaitGroup
@@ -44,11 +54,14 @@ func Example() {
 	fmt.Println(n1.Value()) //map = 9 * 2 = 18
 	fmt.Println(n2.Value()) //reduce = sum(0..9)
 	fmt.Println(n3.Value()) //filter = max(sum(0..9)), when > 50
+	fmt.Println(n4.Value()) //list of all n3 events
+	fmt.Println(n5.Value()) //map of even/odd events of n0
 
 	//Output:
 	// 9
 	// 18
 	// 90
 	// 90
-
+	// [56 72 90]
+	//map[even:[0 2 4 6 8 10 12 14 16 18]]
 }
