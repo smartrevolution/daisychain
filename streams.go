@@ -56,6 +56,7 @@ type Stream struct {
 	vars map[string]interface{}
 }
 
+// SetVar assigns value to name.
 func (s *Stream) SetVar(name string, value interface{}) {
 	//FIXME: Mutex makes another test blocked?! WTF??!?
 	// As long as no var is set outside of a stream method
@@ -65,6 +66,8 @@ func (s *Stream) SetVar(name string, value interface{}) {
 	s.vars[name] = value
 }
 
+// Var returns the value auf var name or returns init if
+// the name does not exist.
 func (s *Stream) Var(name string, init interface{}) (value interface{}) {
 	s.RLock()
 	defer s.RUnlock()
