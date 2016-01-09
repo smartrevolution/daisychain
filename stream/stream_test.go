@@ -1,4 +1,4 @@
-package daisychain
+package stream
 
 import (
 	"fmt"
@@ -10,7 +10,7 @@ import (
 
 func xTestFinalizer(t *testing.T) {
 	for i := 0; i < 3; i++ {
-		s0 := NewSink()
+		s0 := New()
 		t.Log(s0)
 		time.Sleep(1 * time.Second)
 		runtime.GC()
@@ -62,7 +62,7 @@ func TestSink(t *testing.T) {
 	t.Parallel()
 
 	//GIVEN
-	sink := NewSink()
+	sink := New()
 	signal := sink.Hold(0)
 
 	//WHEN
@@ -78,7 +78,7 @@ func TestMap(t *testing.T) {
 	t.Parallel()
 
 	//GIVEN
-	sink := NewSink()
+	sink := New()
 
 	squared := sink.Map(func(ev Event) Event {
 		return ev.(int) * ev.(int)
@@ -99,7 +99,7 @@ func TestReduce(t *testing.T) {
 	t.Parallel()
 
 	//GIVEN
-	sink := NewSink()
+	sink := New()
 
 	squared := sink.Reduce(func(a, b Event) Event {
 		return a.(int) + b.(int)
@@ -120,7 +120,7 @@ func TestFilter(t *testing.T) {
 	t.Parallel()
 
 	//GIVEN
-	sink := NewSink()
+	sink := New()
 
 	evenNums := sink.Filter(func(ev Event) bool {
 		return ev.(int)%2 == 0
@@ -141,7 +141,7 @@ func TestThrottle(t *testing.T) {
 	t.Parallel()
 
 	//GIVEN
-	sink := NewSink()
+	sink := New()
 	mapped := sink.Map(func(ev Event) Event {
 		return ev
 	})
@@ -167,8 +167,8 @@ func TestMerge(t *testing.T) {
 	t.Parallel()
 
 	//GIVEN
-	s0 := NewSink()
-	s1 := NewSink()
+	s0 := New()
+	s1 := New()
 
 	map0 := s0.Map(func(ev Event) Event {
 		return ev
@@ -211,7 +211,7 @@ func TestMerge(t *testing.T) {
 // 	t.Parallel()
 
 // 	//GIVEN
-// 	sink := NewSink()
+// 	sink := New()
 // 	mapped := sink.Map(func(s *Stream, ev Event) Event {
 // 		return ev
 // 	})
@@ -238,7 +238,7 @@ func TestAccu(t *testing.T) {
 	t.Parallel()
 
 	//GIVEN
-	sink := NewSink()
+	sink := New()
 	signal := sink.Accu()
 
 	//WHEN
@@ -255,7 +255,7 @@ func TestGroup(t *testing.T) {
 	t.Parallel()
 
 	//GIVEN
-	sink := NewSink()
+	sink := New()
 	signal := sink.Group(func(ev Event) string {
 		if ev.(int)%2 == 0 {
 			return "even"
@@ -277,7 +277,7 @@ func TestErrorHandling(t *testing.T) {
 	t.Parallel()
 
 	//GIVEN
-	sink := NewSink()
+	sink := New()
 
 	//WHEN
 	signal := sink.Hold(666)
@@ -334,7 +334,7 @@ func TestReduceWithStruct(t *testing.T) {
 	empty := estimation{
 		key: "k0",
 	}
-	estimations := NewSink()
+	estimations := New()
 	add := estimations.Reduce(func(a, b Event) Event {
 		return estimation{
 			min: a.(estimation).min + b.(estimation).min,

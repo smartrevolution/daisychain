@@ -1,6 +1,8 @@
-package daisychain
+package stream_test
 
 import (
+	"github.com/smartrevolution/daisychain/stream"
+
 	"fmt"
 	"sync"
 	"time"
@@ -8,17 +10,17 @@ import (
 
 func Example() {
 	//GIVEN
-	s0 := NewSink()
+	s0 := stream.New()
 
-	s1 := s0.Map(func(ev Event) Event {
+	s1 := s0.Map(func(ev stream.Event) stream.Event {
 		return ev.(int) * 2
 	})
 
-	s2 := s1.Reduce(func(left, right Event) Event {
+	s2 := s1.Reduce(func(left, right stream.Event) stream.Event {
 		return left.(int) + right.(int)
 	}, 0)
 
-	s3 := s2.Filter(func(ev Event) bool {
+	s3 := s2.Filter(func(ev stream.Event) bool {
 		return ev.(int) > 50
 	})
 
@@ -28,7 +30,7 @@ func Example() {
 	n3 := s3.Hold(-1)
 	n4 := s3.Accu()
 
-	keyfn := func(ev Event) string {
+	keyfn := func(ev stream.Event) string {
 		if ev.(int)%2 == 0 {
 			return "even"
 		}

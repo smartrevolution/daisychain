@@ -1,4 +1,4 @@
-package daisychain
+package stream
 
 import (
 	"runtime"
@@ -82,7 +82,7 @@ func sinkFinalizer(s *Sink) {
 }
 
 // NewSink generates a new Sink.
-func NewSink() *Sink {
+func New() *Sink {
 	s := newSink()
 	go func() {
 	Loop:
