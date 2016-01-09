@@ -11,6 +11,7 @@ import (
 func Example() {
 	//GIVEN
 	s0 := stream.New()
+	defer s0.Close()
 
 	s1 := s0.Map(func(ev stream.Event) stream.Event {
 		return ev.(int) * 2
@@ -28,7 +29,7 @@ func Example() {
 	n1 := s1.Hold(-1)
 	n2 := s2.Hold(-1)
 	n3 := s3.Hold(-1)
-	n4 := s3.Accu()
+	n4 := s3.Collect()
 
 	keyfn := func(ev stream.Event) string {
 		if ev.(int)%2 == 0 {
@@ -37,7 +38,7 @@ func Example() {
 		return "odd"
 	}
 
-	n5 := s1.Group(keyfn)
+	n5 := s1.GroupBy(keyfn)
 
 	//WHEN
 	var wg sync.WaitGroup

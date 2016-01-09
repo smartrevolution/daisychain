@@ -58,7 +58,7 @@ func TestSubscribers(t *testing.T) {
 	}
 }
 
-func TestSink(t *testing.T) {
+func TestNew(t *testing.T) {
 	t.Parallel()
 
 	//GIVEN
@@ -66,7 +66,8 @@ func TestSink(t *testing.T) {
 	signal := sink.Hold(0)
 
 	//WHEN
-	send0to9(sink)
+	sink.From(0, 1, 2, 3, 4, 5, 6, 7, 8, 9)
+	time.Sleep(5 * time.Millisecond)
 
 	//THEN
 	if val := signal.Value(); val != 9 {
@@ -87,7 +88,9 @@ func TestMap(t *testing.T) {
 	signal := squared.Hold(0)
 
 	//WHEN
-	send0to9(sink)
+	//send0to9(sink)
+	sink.From(0, 1, 2, 3, 4, 5, 6, 7, 8, 9)
+	time.Sleep(5 * time.Millisecond)
 
 	//THEN
 	if val := signal.Value(); val != 81 {
@@ -108,7 +111,9 @@ func TestReduce(t *testing.T) {
 	signal := squared.Hold(0)
 
 	//WHEN
-	send0to9(sink)
+	//send0to9(sink)
+	sink.From(0, 1, 2, 3, 4, 5, 6, 7, 8, 9)
+	time.Sleep(5 * time.Millisecond)
 
 	//THEN
 	if val := signal.Value(); val != 145 {
@@ -129,7 +134,9 @@ func TestFilter(t *testing.T) {
 	signal := evenNums.Hold(0)
 
 	//WHEN
-	send0to9(sink)
+	//send0to9(sink)
+	sink.From(0, 1, 2, 3, 4, 5, 6, 7, 8, 9)
+	time.Sleep(5 * time.Millisecond)
 
 	//THEN
 	if val := signal.Value(); val != 8 {
@@ -207,42 +214,17 @@ func TestMerge(t *testing.T) {
 	}
 }
 
-// func TestThrottle(t *testing.T) {
-// 	t.Parallel()
-
-// 	//GIVEN
-// 	sink := New()
-// 	mapped := sink.Map(func(s *Stream, ev Event) Event {
-// 		return ev
-// 	})
-// 	throttled := mapped.Throttle(10 * time.Millisecond)
-
-// 	signal := throttled.Hold(666)
-
-// 	//THEN
-// 	signal.OnValue(func(ev Event) {
-// 		expected := []Event{1, 1, 1}
-// 		if got, ok := ev.([]Event); !ok || len(got) != 3 {
-// 			t.Errorf("Expected %#v, Got: %#v", expected, got)
-// 		}
-// 	})
-
-// 	//WHEN
-// 	sink.Send(1)
-// 	sink.Send(1)
-// 	sink.Send(1)
-// 	time.Sleep(15 * time.Millisecond)
-// }
-
-func TestAccu(t *testing.T) {
+func TestCollect(t *testing.T) {
 	t.Parallel()
 
 	//GIVEN
 	sink := New()
-	signal := sink.Accu()
+	signal := sink.Collect()
 
 	//WHEN
-	send0to9(sink)
+	//send0to9(sink)
+	sink.From(0, 1, 2, 3, 4, 5, 6, 7, 8, 9)
+	time.Sleep(5 * time.Millisecond)
 
 	//THEN
 	expected := []Event{0, 1, 2, 3, 4, 5, 6, 7, 8, 9}
@@ -256,7 +238,7 @@ func TestGroup(t *testing.T) {
 
 	//GIVEN
 	sink := New()
-	signal := sink.Group(func(ev Event) string {
+	signal := sink.GroupBy(func(ev Event) string {
 		if ev.(int)%2 == 0 {
 			return "even"
 		}
@@ -264,7 +246,9 @@ func TestGroup(t *testing.T) {
 	})
 
 	//WHEN
-	send0to9(sink)
+	//send0to9(sink)
+	sink.From(0, 1, 2, 3, 4, 5, 6, 7, 8, 9)
+	time.Sleep(5 * time.Millisecond)
 
 	//THEN
 	if evenOdd, ok := signal.Value().(group); !ok || len(evenOdd) != 2 {
@@ -297,21 +281,21 @@ func TestErrorHandling(t *testing.T) {
 	}
 
 	//WHEN
-	empty := NewEmptyEvent()
+	empty := Empty()
 	sink.Send(empty)
 	time.Sleep(10 * time.Millisecond)
 
 	//THEN
-	if val, ok := signal.Value().(Empty); ok && val != empty {
+	if val, ok := signal.Value().(EmptyEvent); ok && val != empty {
 		t.Errorf("Expected: %#v, Got: %#v", empty, val)
 	}
 
 	//WHEN
-	sink.Send(NewErrorEvent("errormsg"))
+	sink.Send(Error("errormsg"))
 	time.Sleep(10 * time.Millisecond)
 
 	//THEN
-	if val, ok := signal.Value().(Error); !ok {
+	if val, ok := signal.Value().(ErrorEvent); !ok {
 		t.Error("Expected: anError, Got:", val)
 	}
 
@@ -374,15 +358,15 @@ func TestReduceWithStruct(t *testing.T) {
 	}
 }
 
-func send0to9(s *Sink) {
-	var wg sync.WaitGroup
-	wg.Add(1)
-	func() {
-		for i := 0; i < 10; i++ {
-			s.Send(i)
-		}
-		wg.Done()
-	}()
-	wg.Wait()
-	time.Sleep(10 * time.Millisecond)
-}
+// func send0to9(s *Sink) {
+// 	var wg sync.WaitGroup
+// 	wg.Add(1)
+// 	func() {
+// 		for i := 0; i < 10; i++ {
+// 			s.Send(i)
+// 		}
+// 		wg.Done()
+// 	}()
+// 	wg.Wait()
+// 	time.Sleep(10 * time.Millisecond)
+// }

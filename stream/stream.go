@@ -1,6 +1,7 @@
 package stream
 
 import (
+	"log"
 	"runtime"
 	"sync"
 	"time"
@@ -30,21 +31,34 @@ func (s *Stream) publish(ev Event) {
 	}
 }
 
-type Empty struct {
+type DoneEvent struct {
+	Event
 }
 
-func NewEmptyEvent() Event {
-	return Empty{}
+// Done creates a new Event of type DoneEvent
+// to notify down-stream that no more values will be send.
+func Done() Event {
+	return EmptyEvent{}
 }
 
-type Error struct {
+type EmptyEvent struct {
+	Event
+}
+
+// Empty creates a new Event of type ErrorEvent
+// to notify down-stream an empty value.
+func Empty() Event {
+	return EmptyEvent{}
+}
+
+type ErrorEvent struct {
 	Event
 	msg string
 }
 
-// NewErrorEvent creates a new Event of type Error
-func NewErrorEvent(msg string) Event {
-	return Error{msg: msg}
+// Error creates a new Event of type ErrorEvent.
+func Error(msg string) Event {
+	return ErrorEvent{msg: msg}
 }
 
 // Stream is a stream.
@@ -78,30 +92,33 @@ func newSink() *Sink {
 
 // If the runtime discards a Sink, all depending streams are discarded , too.
 func sinkFinalizer(s *Sink) {
+	log.Println("DEBUG: Called Finalizer")
 	s.close()
 }
 
 // NewSink generates a new Sink.
 func New() *Sink {
 	s := newSink()
+	runtime.SetFinalizer(s, sinkFinalizer)
 	go func() {
-	Loop:
-		for {
-			select {
-			case ev, ok := <-s.in:
-				if !ok {
-					break Loop
-				}
-				s.publish(ev)
-			case <-s.quit:
-				break Loop
-			}
+		for ev := range s.in {
+			s.publish(ev)
 		}
+		log.Println("DEBUG: Closing Sink")
 	}()
 
-	runtime.SetFinalizer(s, sinkFinalizer)
-
 	return s
+}
+
+func (s *Sink) From(evts ...Event) {
+	for ev := range evts {
+		s.Send(ev)
+	}
+}
+
+func (s *Sink) Close() {
+	close(s.in)
+	s.close()
 }
 
 // Send sends an Event from a Sink down the stream
@@ -116,10 +133,10 @@ func (s *Stream) send(ev Event) {
 
 // close will unsubscribe all childs recursively.
 func (s *Stream) close() {
-	s.quit <- true
 	for child := range s.subs {
 		s.unsubscribe(child)
 		child.close()
+		close(child.in)
 	}
 }
 
@@ -132,22 +149,13 @@ func (s *Stream) Map(mapfn MapFunc) *Stream {
 	s.subscribe(res)
 
 	go func() {
-	Loop:
-		for {
-			select {
-			case ev, ok := <-res.in:
-				if !ok {
-					break Loop
-				}
-
-				if ev != nil {
-					val := mapfn(ev)
-					res.publish(val)
-				}
-			case <-res.quit:
-				break Loop
+		for ev := range res.in {
+			if ev != nil {
+				val := mapfn(ev)
+				res.publish(val)
 			}
 		}
+		log.Println("DEBUG: Closing Map()")
 	}()
 
 	return res
@@ -163,22 +171,13 @@ func (s *Stream) Reduce(reducefn ReduceFunc, init Event) *Stream {
 
 	go func() {
 		val := init
-	Loop:
-		for {
-			select {
-			case ev, ok := <-res.in:
-				if !ok {
-					break Loop
-				}
-
-				if ev != nil {
-					val = reducefn(val, ev)
-					res.publish(val)
-				}
-			case <-res.quit:
-				break Loop
+		for ev := range res.in {
+			if ev != nil {
+				val = reducefn(val, ev)
+				res.publish(val)
 			}
 		}
+		log.Println("DEBUG: Closing Reduce()")
 	}()
 
 	return res
@@ -193,20 +192,12 @@ func (s *Stream) Filter(filterfn FilterFunc) *Stream {
 	s.subscribe(res)
 
 	go func() {
-	Loop:
-		for {
-			select {
-			case ev, ok := <-res.in:
-				if !ok {
-					break Loop
-				}
-				if ev != nil && filterfn(ev) {
-					res.publish(ev)
-				}
-			case <-res.quit:
-				break Loop
+		for ev := range res.in {
+			if ev != nil && filterfn(ev) {
+				res.publish(ev)
 			}
 		}
+		log.Println("DEBUG: Closing Filter()")
 	}()
 
 	return res
@@ -221,20 +212,12 @@ func (s *Stream) Merge(other *Stream) *Stream {
 	other.subscribe(res)
 
 	go func() {
-	Loop:
-		for {
-			select {
-			case ev, ok := <-res.in:
-				if !ok {
-					break Loop
-				}
-				if ev != nil {
-					res.publish(ev)
-				}
-			case <-res.quit:
-				break Loop
+		for ev := range res.in {
+			if ev != nil {
+				res.publish(ev)
 			}
 		}
+		log.Println("DEBUG: Closing Merge()")
 	}()
 
 	return res
@@ -252,7 +235,6 @@ func (s *Stream) Throttle(d time.Duration) *Stream {
 	go func() {
 		ticker := time.NewTicker(d)
 		var events []Event
-	Loop:
 		for {
 			select {
 			case <-ticker.C:
@@ -260,13 +242,13 @@ func (s *Stream) Throttle(d time.Duration) *Stream {
 				events = []Event{}
 			case ev, ok := <-res.in:
 				if !ok {
-					break Loop
+					break
 				}
 				events = append(events, ev)
-			case <-res.quit:
-				break Loop
+
 			}
 		}
+		log.Println("DEBUG: Closing Trottle()")
 	}()
 
 	return res
@@ -277,39 +259,32 @@ func (s *Stream) Throttle(d time.Duration) *Stream {
 func (s *Stream) Hold(initVal Event) *Signal {
 	res := &Signal{
 		parent:  newStream(),
-		event:   NewEmptyEvent(),
+		event:   Empty(),
 		initVal: initVal,
 	}
 	s.subscribe(res.parent)
 
 	go func() {
-	Loop:
-		for {
-			select {
-			case ev, ok := <-res.parent.in:
-				if !ok {
-					break Loop
-				}
-				res.Lock()
-				res.initialized = true
-				res.event = ev
-				res.Unlock()
-				if res.callbackfn != nil {
-					go res.callbackfn(ev)
-				}
-			case <-res.parent.quit:
-				break Loop
+		for ev := range res.parent.in {
+			res.Lock()
+			cb := res.callbackfn
+			res.initialized = true
+			res.event = ev
+			if cb != nil {
+				go cb(ev)
 			}
+			res.Unlock()
 		}
+		log.Println("DEBUG: Closing Hold()")
 	}()
 	return res
 }
 
-// Accu accumulates all events from a stream.
+// Collect collects all events from a stream.
 // It appends these events internally to an []Event,
-// which it also passes to the CallbackFunc any time
+// which it also passes asynchronuously to the CallbackFunc any time
 // a new event arrives.
-func (s *Stream) Accu() *Signal {
+func (s *Stream) Collect() *Signal {
 	res := &Signal{
 		parent:      newStream(),
 		event:       []Event{},
@@ -318,23 +293,16 @@ func (s *Stream) Accu() *Signal {
 	s.subscribe(res.parent)
 
 	go func() {
-	Loop:
-		for {
-			select {
-			case ev, ok := <-res.parent.in:
-				if !ok {
-					break Loop
-				}
-				res.Lock()
-				res.event = append(res.event.([]Event), ev)
-				if res.callbackfn != nil {
-					go res.callbackfn(res.event)
-				}
-				res.Unlock()
-			case <-res.parent.quit:
-				break Loop
+		for ev := range res.parent.in {
+			res.Lock()
+			cb := res.callbackfn
+			res.event = append(res.event.([]Event), ev)
+			if cb != nil {
+				go cb(res.event)
 			}
+			res.Unlock()
 		}
+		log.Println("DEBUG: Closing Collect()")
 	}()
 	return res
 }
@@ -342,9 +310,9 @@ func (s *Stream) Accu() *Signal {
 type KeyFunc func(ev Event) string
 type group map[string][]Event
 
-// Group accumulates all events under the string key
+// GroupBy collects all events under the string key
 // that is returned by applying KeyFunc to the event.
-func (s *Stream) Group(keyfn KeyFunc) *Signal {
+func (s *Stream) GroupBy(keyfn KeyFunc) *Signal {
 	res := &Signal{
 		parent:      newStream(),
 		event:       make(group),
@@ -353,24 +321,43 @@ func (s *Stream) Group(keyfn KeyFunc) *Signal {
 	s.subscribe(res.parent)
 
 	go func() {
-	Loop:
-		for {
-			select {
-			case ev, ok := <-res.parent.in:
-				if !ok {
-					break Loop
-				}
-				res.Lock()
-				key := keyfn(ev)
-				(res.event.(group))[key] = append(res.event.(group)[key], ev)
-				if res.callbackfn != nil {
-					go res.callbackfn(res.event)
-				}
-				res.Unlock()
-			case <-res.parent.quit:
-				break Loop
+		for ev := range res.parent.in {
+			res.Lock()
+			cb := res.callbackfn
+			key := keyfn(ev)
+			(res.event.(group))[key] = append(res.event.(group)[key], ev)
+			if cb != nil {
+				go cb(res.event)
 			}
+			res.Unlock()
 		}
+		log.Println("DEBUG: Closing GroupBy()")
+	}()
+	return res
+}
+
+// Distinct collects unique events under the string key
+// that is returned by applying KeyFunc to the event.
+func (s *Stream) Distinct(keyfn KeyFunc) *Signal {
+	res := &Signal{
+		parent:      newStream(),
+		event:       make(map[string]Event),
+		initialized: true,
+	}
+	s.subscribe(res.parent)
+
+	go func() {
+		for ev := range res.parent.in {
+			res.Lock()
+			cb := res.callbackfn
+			key := keyfn(ev)
+			(res.event.(map[string]Event))[key] = ev
+			if cb != nil {
+				go cb(res.event)
+			}
+			res.Unlock()
+		}
+		log.Println("DEBUG: Closing Distinct()")
 	}()
 	return res
 }
