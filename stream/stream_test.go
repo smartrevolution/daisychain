@@ -228,12 +228,12 @@ func TestCollect(t *testing.T) {
 
 	//THEN
 	expected := []Event{0, 1, 2, 3, 4, 5, 6, 7, 8, 9}
-	if val := signal.Value().([]Event); len(val) != len(expected) {
+	if val, ok := signal.Value().([]Event); len(val) != len(expected) || !ok {
 		t.Errorf("Expected: %#v, Got: %#v", expected, val)
 	}
 }
 
-func TestGroup(t *testing.T) {
+func TestGroupBy(t *testing.T) {
 	t.Parallel()
 
 	//GIVEN
@@ -251,9 +251,134 @@ func TestGroup(t *testing.T) {
 	time.Sleep(5 * time.Millisecond)
 
 	//THEN
-	if evenOdd, ok := signal.Value().(group); !ok || len(evenOdd) != 2 {
+	if evenOdd, ok := signal.Value().(group); len(evenOdd) != 2 || !ok {
 		t.Log(signal.Value())
 		t.Errorf("Expected: map[even:[0 2 4 6 8] odd:[1 3 5 7 9]], Got: %#v", evenOdd)
+	}
+}
+
+func TestDistinct(t *testing.T) {
+	t.Parallel()
+
+	//GIVEN
+	sink := New()
+	signal := sink.Distinct(func(ev Event) string {
+		if ev.(int)%2 == 0 {
+			return "even"
+		}
+		return "odd"
+	})
+
+	//WHEN
+	//send0to9(sink)
+	sink.From(0, 1, 2, 3, 4, 5, 6, 7, 8, 9)
+	time.Sleep(5 * time.Millisecond)
+
+	//THEN
+	if evenOdd, ok := signal.Value().(map[string]Event); len(evenOdd) != 2 || !ok {
+		t.Log(signal.Value())
+		t.Errorf("Expected: map[even:8 odd:9], Got: %#v", evenOdd)
+	}
+}
+
+func TestSignalOnChange(t *testing.T) {
+	t.Parallel()
+	var wg sync.WaitGroup
+
+	//GIVEN
+	sink := New()
+
+	//WHEN/THEN
+	signal := sink.Hold(0)
+	values := signal.OnValue(func(ev Event) { //1
+		switch ev.(type) {
+		case ErrorEvent:
+			t.Error("Received error event in OnValue()-1")
+		case CompleteEvent:
+			t.Error("Received complete event in OnValue()-1")
+		case EmptyEvent:
+			//all good, but do nothing
+		default: //Event (with value)
+			t.Logf("OnValue=%T", ev)
+			wg.Done()
+		}
+	})
+	empty := signal.OnValue(func(ev Event) { //2
+		switch ev.(type) {
+		case ErrorEvent:
+			t.Error("Received error event in OnValue()-2")
+		case CompleteEvent:
+			t.Error("Received complete event in OnValue()-2")
+		case EmptyEvent:
+			t.Logf("OnValue=%T", ev)
+			wg.Done()
+		default: //Event (with value)
+			//all good, but do nothing
+		}
+	})
+	errors := signal.OnError(func(ev Event) {
+		switch ev.(type) {
+		case ErrorEvent:
+			t.Logf("OnError=%T", ev)
+			wg.Done()
+		case CompleteEvent:
+			t.Error("Received complete event in OnError()")
+		case EmptyEvent:
+			t.Error("Received empty event in OnError()")
+		default: //Event (with value)
+			t.Error("Received value event in OnError()")
+			//all good, but do nothing
+		}
+	})
+	completed := signal.OnComplete(func(ev Event) {
+		switch ev.(type) {
+		case ErrorEvent:
+			t.Error("Received complete event in OnComplete()")
+		case CompleteEvent:
+			t.Logf("OnComplete=%T", ev)
+			wg.Done()
+		case EmptyEvent:
+			t.Error("Received empty event in OnComplete()")
+		default: //Event (with value)
+			t.Error("Received value event in OnComplete()")
+			//all good, but do nothing
+		}
+	})
+
+	wg.Add(4)
+	sink.Send(1)
+	sink.Send(Empty())
+	sink.Send(Error("Testerror"))
+	sink.Send(Complete())
+	time.Sleep(10 * time.Millisecond)
+	wg.Wait()
+
+	//THEN
+	if v := len(signal.values); v != 2 {
+		t.Error("Expected 2, Got:", v)
+	}
+	if e := len(signal.errors); e != 1 {
+		t.Error("Expected 1, Got:", e)
+	}
+	if c := len(signal.completed); c != 1 {
+		t.Error("Expected 1, Got:", c)
+	}
+
+	//WHEN
+	signal.Unsubscribe(values)
+	signal.Unsubscribe(empty)
+	signal.Unsubscribe(errors)
+	signal.Unsubscribe(completed)
+
+	//THEN
+	if v := len(signal.values); v != 0 {
+		t.Error("Expected 0, Got:", v)
+	}
+	if e := len(signal.errors); e != 0 {
+		t.Error("Expected 0, Got:", e)
+	}
+	if c := len(signal.completed); c != 0 {
+		t.Error("Expected 0, Got:", c)
 	}
 }
 

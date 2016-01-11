@@ -31,14 +31,14 @@ func (s *Stream) publish(ev Event) {
 	}
 }
 
-type DoneEvent struct {
+type CompleteEvent struct {
 	Event
 }
 
-// Done creates a new Event of type DoneEvent
+// Complete creates a new Event of type CompleteEvent
 // to notify down-stream that no more values will be send.
-func Done() Event {
-	return EmptyEvent{}
+func Complete() Event {
+	return CompleteEvent{}
 }
 
 type EmptyEvent struct {
@@ -255,22 +255,17 @@ func (s *Stream) Throttle(d time.Duration) *Stream {
 // Hold generates a Signal from a stream.
 // The signal always holds the last event from the stream.
 func (s *Stream) Hold(initVal Event) *Signal {
-	res := &Signal{
-		parent:  newStream(),
-		event:   Empty(),
-		initVal: initVal,
-	}
+	res := newSignal()
+	res.event = initVal
+
 	s.subscribe(res.parent)
 
 	go func() {
 		for ev := range res.parent.in {
 			res.Lock()
-			cb := res.callbackfn
 			res.initialized = true
 			res.event = ev
-			if cb != nil {
-				go cb(ev)
-			}
+			res.publish(res.event)
 			res.Unlock()
 		}
 		log.Println("DEBUG: Closing Hold()")
@@ -283,21 +278,16 @@ func (s *Stream) Hold(initVal Event) *Signal {
 // which it also passes asynchronuously to the CallbackFunc any time
 // a new event arrives.
 func (s *Stream) Collect() *Signal {
-	res := &Signal{
-		parent:      newStream(),
-		event:       []Event{},
-		initialized: true,
-	}
+	res := newSignal()
+	res.event = []Event{}
+
 	s.subscribe(res.parent)
 
 	go func() {
 		for ev := range res.parent.in {
 			res.Lock()
-			cb := res.callbackfn
 			res.event = append(res.event.([]Event), ev)
-			if cb != nil {
-				go cb(res.event)
-			}
+			res.publish(res.event)
 			res.Unlock()
 		}
 		log.Println("DEBUG: Closing Collect()")
@@ -311,22 +301,17 @@ type group map[string][]Event
 // GroupBy collects all events under the string key
 // that is returned by applying KeyFunc to the event.
 func (s *Stream) GroupBy(keyfn KeyFunc) *Signal {
-	res := &Signal{
-		parent:      newStream(),
-		event:       make(group),
-		initialized: true,
-	}
+	res := newSignal()
+	res.event = make(group)
+
 	s.subscribe(res.parent)
 
 	go func() {
 		for ev := range res.parent.in {
 			res.Lock()
-			cb := res.callbackfn
 			key := keyfn(ev)
 			(res.event.(group))[key] = append(res.event.(group)[key], ev)
-			if cb != nil {
-				go cb(res.event)
-			}
+			res.publish(res.event)
 			res.Unlock()
 		}
 		log.Println("DEBUG: Closing GroupBy()")
@@ -337,22 +322,17 @@ func (s *Stream) GroupBy(keyfn KeyFunc) *Signal {
 // Distinct collects unique events under the string key
 // that is returned by applying KeyFunc to the event.
 func (s *Stream) Distinct(keyfn KeyFunc) *Signal {
-	res := &Signal{
-		parent:      newStream(),
-		event:       make(map[string]Event),
-		initialized: true,
-	}
+	res := newSignal()
+	res.event = make(map[string]Event)
+
 	s.subscribe(res.parent)
 
 	go func() {
 		for ev := range res.parent.in {
 			res.Lock()
-			cb := res.callbackfn
 			key := keyfn(ev)
 			(res.event.(map[string]Event))[key] = ev
-			if cb != nil {
-				go cb(res.event)
-			}
+			res.publish(res.event)
 			res.Unlock()
 		}
 		log.Println("DEBUG: Closing Distinct()")
@@ -367,7 +347,50 @@ type Signal struct {
 	event       Event
 	initVal     Event
 	initialized bool
-	callbackfn  CallbackFunc
+	values      observers
+	errors      observers
+	completed   observers
+}
+
+func newSignal() *Signal {
+	return &Signal{
+		parent:      newStream(),
+		initialized: true,
+		values:      make(observers),
+		errors:      make(observers),
+		completed:   make(observers),
+	}
+}
+
+func (s *Signal) publish(ev Event) {
+	switch ev.(type) {
+	case ErrorEvent:
+		s.errors.publish(ev)
+	case CompleteEvent:
+		s.completed.publish(ev)
+	default:
+		s.values.publish(ev)
+	}
+}
+
+type Subscription *CallbackFunc
+type observers map[Subscription]CallbackFunc
+
+func (o *observers) subscribe(callbackfn CallbackFunc) Subscription {
+	sub := &callbackfn
+	(*o)[sub] = callbackfn
+	return sub
+}
+
+func (o *observers) unsubscribe(sub Subscription) {
+	delete(*o, sub)
+}
+
+func (o *observers) publish(ev Event) {
+	for _, observer := range *o {
+		go observer(ev)
+	}
+
 }
 
 // Value returns the current value of the Signal.
@@ -383,10 +406,36 @@ func (s *Signal) Value() Event {
 // CallbackFunc is the function signature used by OnValue().
 type CallbackFunc func(Event)
 
-// OnValue registers a callback function that is called each time
+// OnValue registers callback functions that are called each time
 // the Signal is updated.
-func (s *Signal) OnValue(callbackfn CallbackFunc) {
+func (s *Signal) OnValue(callbackfn CallbackFunc) Subscription {
 	s.Lock()
 	defer s.Unlock()
-	s.callbackfn = callbackfn
+	return s.values.subscribe(callbackfn)
+}
+
+// OnError registers callback functions that are called each time
+// the Signal receives an error event.
+func (s *Signal) OnError(callbackfn CallbackFunc) Subscription {
+	s.Lock()
+	defer s.Unlock()
+	return s.errors.subscribe(callbackfn)
+}
+
+// OnComplete registers callback functions that are called
+// when there are no more values to expect.
+func (s *Signal) OnComplete(callbackfn CallbackFunc) Subscription {
+	s.Lock()
+	defer s.Unlock()
+	return s.completed.subscribe(callbackfn)
+}
+
+// Unsubscribe does its work to unsubscribe callback functions
+// from On{Value | Error | Complete}.
+func (s *Signal) Unsubscribe(sub Subscription) {
+	s.Lock()
+	defer s.Unlock()
+	s.values.unsubscribe(sub)
+	s.errors.unsubscribe(sub)
+	s.completed.unsubscribe(sub)
 }
