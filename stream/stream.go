@@ -65,7 +65,6 @@ func Error(msg string) Event {
 type Stream struct {
 	sync.RWMutex
 	in   chan Event
-	quit chan bool
 	subs subscribers
 }
 
@@ -78,7 +77,6 @@ type Sink struct {
 func newStream() *Stream {
 	return &Stream{
 		in:   make(chan Event),
-		quit: make(chan bool),
 		subs: make(subscribers),
 	}
 }
