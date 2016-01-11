@@ -1,5 +1,13 @@
 # Streams of computations
 
+* Use stream.New() to create a new Stream.
+* Use Map, Reduce, Filter to manipulate the stream.
+* You can create trees of computations out of these operators.
+* Use Send() and From() to push data into the stream tree.
+* Use Hold(), Collect(), Distinct() to create a signal of values.
+* Attach callbacks to Signals with OnValue(), OnEmpty() and OnError() or use Value() to access the results of your computations.
+
+
 ```go
 package stream_test
 
