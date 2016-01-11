@@ -1,6 +1,6 @@
 # Streams of computations
 
-```
+```go
 package stream_test
 
 import (
