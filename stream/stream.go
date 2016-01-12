@@ -263,9 +263,16 @@ func (s *Stream) Hold(initVal Event) *Signal {
 	go func() {
 		for ev := range res.parent.in {
 			res.Lock()
-			res.initialized = true
-			res.event = ev
-			res.publish(res.event)
+			switch ev.(type) {
+			case ErrorEvent:
+				res.errors.publish(ev)
+			case CompleteEvent:
+				res.completed.publish(ev)
+			default:
+				res.initialized = true
+				res.event = ev
+				res.values.publish(res.event)
+			}
 			res.Unlock()
 		}
 		log.Println("DEBUG: Closing Hold()")
@@ -286,8 +293,15 @@ func (s *Stream) Collect() *Signal {
 	go func() {
 		for ev := range res.parent.in {
 			res.Lock()
-			res.event = append(res.event.([]Event), ev)
-			res.publish(res.event)
+			switch ev.(type) {
+			case ErrorEvent:
+				res.errors.publish(ev)
+			case CompleteEvent:
+				res.completed.publish(ev)
+			default:
+				res.event = append(res.event.([]Event), ev)
+				res.values.publish(res.event)
+			}
 			res.Unlock()
 		}
 		log.Println("DEBUG: Closing Collect()")
@@ -309,9 +323,16 @@ func (s *Stream) GroupBy(keyfn KeyFunc) *Signal {
 	go func() {
 		for ev := range res.parent.in {
 			res.Lock()
-			key := keyfn(ev)
-			(res.event.(group))[key] = append(res.event.(group)[key], ev)
-			res.publish(res.event)
+			switch ev.(type) {
+			case ErrorEvent:
+				res.errors.publish(ev)
+			case CompleteEvent:
+				res.completed.publish(ev)
+			default:
+				key := keyfn(ev)
+				(res.event.(group))[key] = append(res.event.(group)[key], ev)
+				res.values.publish(res.event)
+			}
 			res.Unlock()
 		}
 		log.Println("DEBUG: Closing GroupBy()")
@@ -330,9 +351,16 @@ func (s *Stream) Distinct(keyfn KeyFunc) *Signal {
 	go func() {
 		for ev := range res.parent.in {
 			res.Lock()
-			key := keyfn(ev)
-			(res.event.(map[string]Event))[key] = ev
-			res.publish(res.event)
+			switch ev.(type) {
+			case ErrorEvent:
+				res.errors.publish(ev)
+			case CompleteEvent:
+				res.completed.publish(ev)
+			default:
+				key := keyfn(ev)
+				(res.event.(map[string]Event))[key] = ev
+				res.values.publish(res.event)
+			}
 			res.Unlock()
 		}
 		log.Println("DEBUG: Closing Distinct()")
@@ -362,16 +390,16 @@ func newSignal() *Signal {
 	}
 }
 
-func (s *Signal) publish(ev Event) {
-	switch ev.(type) {
-	case ErrorEvent:
-		s.errors.publish(ev)
-	case CompleteEvent:
-		s.completed.publish(ev)
-	default:
-		s.values.publish(ev)
-	}
-}
+// func (s *Signal) publish(ev Event) {
+// 	switch ev.(type) {
+// 	case ErrorEvent:
+// 		s.errors.publish(ev)
+// 	case CompleteEvent:
+// 		s.completed.publish(ev)
+// 	default:
+// 		s.values.publish(ev)
+// 	}
+// }
 
 type Subscription *CallbackFunc
 type observers map[Subscription]CallbackFunc
