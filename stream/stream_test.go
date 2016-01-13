@@ -514,16 +514,3 @@ func TestReduceWithStruct(t *testing.T) {
 		t.Error("Expected: 6-9, Got:", est)
 	}
 }
-
-// func send0to9(s *Sink) {
-// 	var wg sync.WaitGroup
-// 	wg.Add(1)
-// 	func() {
-// 		for i := 0; i < 10; i++ {
-// 			s.Send(i)
-// 		}
-// 		wg.Done()
-// 	}()
-// 	wg.Wait()
-// 	time.Sleep(10 * time.Millisecond)
-// }
