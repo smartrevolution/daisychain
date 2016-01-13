@@ -14,6 +14,7 @@ type subscribers map[*Stream]interface{}
 func (s *Stream) subscribe(child *Stream) {
 	s.Lock()
 	defer s.Unlock()
+	child.root = s.root
 	s.subs[child] = struct{}{}
 }
 
@@ -66,6 +67,7 @@ type Stream struct {
 	sync.RWMutex
 	in   chan Event
 	subs subscribers
+	root *Sink
 }
 
 // Sink is the first node of a stream.
@@ -83,9 +85,11 @@ func newStream() *Stream {
 
 // newSink is a helper constructor for sinks.
 func newSink() *Sink {
-	return &Sink{
+	sink := &Sink{
 		Stream: newStream(),
 	}
+	sink.root = sink
+	return sink
 }
 
 // If the runtime discards a Sink, all depending streams are discarded , too.
@@ -395,6 +399,10 @@ func newSignal() *Signal {
 		errors:      make(observers),
 		completed:   make(observers),
 	}
+}
+
+func (s *Signal) Close() {
+	s.parent.root.Close()
 }
 
 type Subscription *CallbackFunc

@@ -17,22 +17,26 @@ func xTestFinalizer(t *testing.T) {
 	}
 }
 
-func xTestClose(t *testing.T) {
+func TestClose(t *testing.T) {
 	t.Parallel()
-	//GIVEN
-	parent := newStream()
-	child := newStream()
-	time.Sleep(50 * time.Millisecond)
 
-	//WHEN
-	parent.subscribe(child)
-	time.Sleep(50 * time.Millisecond)
-	parent.close()
+	sink := New()
+	mapped := sink.Map(func(ev Event) Event {
+		return ev //do nothing
+	})
 
-	//THEN
-	if l := len(parent.subs); l != 0 {
-		t.Error("Expected 0, Got:", l)
-	}
+	sink.From(1, 2, 3, 4, 5)
+	sink.Close()
+
+	sink = New()
+	mapped = sink.Map(func(ev Event) Event {
+		return ev //do nothing
+	})
+	signal := mapped.Hold(0)
+
+	sink.From(1, 2, 3, 4, 5)
+	signal.Close()
+	//not a really intelligent test...but...
 }
 
 func TestSubscribers(t *testing.T) {
@@ -88,7 +92,6 @@ func TestMap(t *testing.T) {
 	signal := squared.Hold(0)
 
 	//WHEN
-	//send0to9(sink)
 	sink.From(0, 1, 2, 3, 4, 5, 6, 7, 8, 9)
 	time.Sleep(5 * time.Millisecond)
 
@@ -111,7 +114,6 @@ func TestReduce(t *testing.T) {
 	signal := squared.Hold(0)
 
 	//WHEN
-	//send0to9(sink)
 	sink.From(0, 1, 2, 3, 4, 5, 6, 7, 8, 9)
 	time.Sleep(5 * time.Millisecond)
 
@@ -134,7 +136,6 @@ func TestFilter(t *testing.T) {
 	signal := evenNums.Hold(0)
 
 	//WHEN
-	//send0to9(sink)
 	sink.From(0, 1, 2, 3, 4, 5, 6, 7, 8, 9)
 	time.Sleep(5 * time.Millisecond)
 
@@ -222,7 +223,6 @@ func TestCollect(t *testing.T) {
 	signal := sink.Collect()
 
 	//WHEN
-	//send0to9(sink)
 	sink.From(0, 1, 2, 3, 4, 5, 6, 7, 8, 9)
 	time.Sleep(5 * time.Millisecond)
 
@@ -246,7 +246,6 @@ func TestGroupBy(t *testing.T) {
 	})
 
 	//WHEN
-	//send0to9(sink)
 	sink.From(0, 1, 2, 3, 4, 5, 6, 7, 8, 9)
 	time.Sleep(5 * time.Millisecond)
 
@@ -270,7 +269,6 @@ func TestDistinct(t *testing.T) {
 	})
 
 	//WHEN
-	//send0to9(sink)
 	sink.From(0, 1, 2, 3, 4, 5, 6, 7, 8, 9)
 	time.Sleep(5 * time.Millisecond)
 
