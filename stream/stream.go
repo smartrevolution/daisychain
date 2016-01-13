@@ -256,7 +256,8 @@ func (s *Stream) Throttle(d time.Duration) *Stream {
 // The signal always holds the last event from the stream.
 func (s *Stream) Hold(initVal Event) *Signal {
 	res := newSignal()
-	res.event = initVal
+	res.initVal = initVal
+	res.event = res.initVal
 
 	s.subscribe(res.parent)
 
@@ -286,7 +287,8 @@ func (s *Stream) Hold(initVal Event) *Signal {
 // a new event arrives.
 func (s *Stream) Collect() *Signal {
 	res := newSignal()
-	res.event = []Event{}
+	res.initVal = []Event{}
+	res.event = res.initVal
 
 	s.subscribe(res.parent)
 
@@ -299,6 +301,7 @@ func (s *Stream) Collect() *Signal {
 			case CompleteEvent:
 				res.completed.publish(ev)
 			default:
+				res.initialized = true
 				res.event = append(res.event.([]Event), ev)
 				res.values.publish(res.event)
 			}
@@ -316,7 +319,8 @@ type group map[string][]Event
 // that is returned by applying KeyFunc to the event.
 func (s *Stream) GroupBy(keyfn KeyFunc) *Signal {
 	res := newSignal()
-	res.event = make(group)
+	res.initVal = make(group)
+	res.event = res.initVal
 
 	s.subscribe(res.parent)
 
@@ -329,6 +333,7 @@ func (s *Stream) GroupBy(keyfn KeyFunc) *Signal {
 			case CompleteEvent:
 				res.completed.publish(ev)
 			default:
+				res.initialized = true
 				key := keyfn(ev)
 				(res.event.(group))[key] = append(res.event.(group)[key], ev)
 				res.values.publish(res.event)
@@ -344,7 +349,8 @@ func (s *Stream) GroupBy(keyfn KeyFunc) *Signal {
 // that is returned by applying KeyFunc to the event.
 func (s *Stream) Distinct(keyfn KeyFunc) *Signal {
 	res := newSignal()
-	res.event = make(map[string]Event)
+	res.initVal = make(map[string]Event)
+	res.event = res.initVal
 
 	s.subscribe(res.parent)
 
@@ -357,6 +363,7 @@ func (s *Stream) Distinct(keyfn KeyFunc) *Signal {
 			case CompleteEvent:
 				res.completed.publish(ev)
 			default:
+				res.initialized = true
 				key := keyfn(ev)
 				(res.event.(map[string]Event))[key] = ev
 				res.values.publish(res.event)
@@ -390,17 +397,6 @@ func newSignal() *Signal {
 	}
 }
 
-// func (s *Signal) publish(ev Event) {
-// 	switch ev.(type) {
-// 	case ErrorEvent:
-// 		s.errors.publish(ev)
-// 	case CompleteEvent:
-// 		s.completed.publish(ev)
-// 	default:
-// 		s.values.publish(ev)
-// 	}
-// }
-
 type Subscription *CallbackFunc
 type observers map[Subscription]CallbackFunc
 
@@ -419,6 +415,13 @@ func (o *observers) publish(ev Event) {
 		go observer(ev)
 	}
 
+}
+
+func (s *Signal) Reset() {
+	s.Lock()
+	defer s.Unlock()
+	s.initialized = false
+	s.event = s.initVal
 }
 
 // Value returns the current value of the Signal.

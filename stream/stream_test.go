@@ -382,7 +382,49 @@ func TestSignalOnChange(t *testing.T) {
 	}
 }
 
-func TestErrorHandling(t *testing.T) {
+func TestReset(t *testing.T) {
+	t.Parallel()
+
+	var wg sync.WaitGroup
+	wg.Add(2)
+
+	//GIVEN
+	sink := New()
+
+	//WHEN/THEN
+	signal := sink.Hold(666)
+
+	signal.OnValue(func(ev Event) {
+		t.Log(ev)
+		if val := ev.(int); val != 1 {
+			t.Error("Expected: 1, Got:", val)
+		}
+		wg.Done()
+	})
+
+	signal.OnComplete(func(ev Event) {
+		t.Log(ev)
+		if val := signal.Value(); val != 1 {
+			t.Error("Expected: 1, Got:", val)
+		}
+
+		signal.Reset()
+
+		if val := signal.Value(); val != 666 {
+			t.Error("Expected: 666, Got:", val)
+		}
+		wg.Done()
+	})
+
+	sink.Send(1)
+	time.Sleep(10 * time.Millisecond)
+	sink.Send(Complete())
+
+	wg.Wait()
+
+}
+
+func TestEmptyHandling(t *testing.T) {
 	t.Parallel()
 
 	//GIVEN
@@ -414,16 +456,6 @@ func TestErrorHandling(t *testing.T) {
 	if val, ok := signal.Value().(EmptyEvent); ok && val != empty {
 		t.Errorf("Expected: %#v, Got: %#v", empty, val)
 	}
-
-	//WHEN
-	sink.Send(Error("errormsg"))
-	time.Sleep(10 * time.Millisecond)
-
-	//THEN
-	if val, ok := signal.Value().(ErrorEvent); !ok {
-		t.Error("Expected: anError, Got:", val)
-	}
-
 }
 
 type estimation struct {
