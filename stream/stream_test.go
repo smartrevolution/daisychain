@@ -20,6 +20,7 @@ func xTestFinalizer(t *testing.T) {
 func TestClose(t *testing.T) {
 	t.Parallel()
 
+	//Close() Sink
 	sink := New()
 	mapped := sink.Map(func(ev Event) Event {
 		return ev //do nothing
@@ -36,7 +37,10 @@ func TestClose(t *testing.T) {
 
 	sink.From(1, 2, 3, 4, 5)
 	signal.Close()
-	//not a really intelligent test...but...
+	//not a really intelligent test...but it doesn't crash
+	//and that is a good sign. Actually I tested this with more
+	//debug output to see the inner workings running well.
+	//I need to create a better test for that.
 }
 
 func TestSubscribers(t *testing.T) {

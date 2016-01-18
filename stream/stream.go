@@ -70,6 +70,10 @@ type Stream struct {
 	root *Sink
 }
 
+func (s *Stream) Close() {
+	s.root.Close()
+}
+
 // Sink is the first node of a stream.
 type Sink struct {
 	*Stream
@@ -142,6 +146,11 @@ func (s *Stream) close() {
 	}
 }
 
+func isCompleteEvent(ev Event) bool {
+	_, isCompleteEvent := ev.(CompleteEvent)
+	return isCompleteEvent
+}
+
 // MapFunc is the function signature used by Map.
 type MapFunc func(Event) Event
 
@@ -153,8 +162,12 @@ func (s *Stream) Map(mapfn MapFunc) *Stream {
 	go func() {
 		for ev := range res.in {
 			if ev != nil {
-				val := mapfn(ev)
-				res.publish(val)
+				if !isCompleteEvent(ev) {
+					val := mapfn(ev)
+					res.publish(val)
+				} else {
+					res.publish(ev)
+				}
 			}
 		}
 		log.Println("DEBUG: Closing Map()")
@@ -175,8 +188,12 @@ func (s *Stream) Reduce(reducefn ReduceFunc, init Event) *Stream {
 		val := init
 		for ev := range res.in {
 			if ev != nil {
-				val = reducefn(val, ev)
-				res.publish(val)
+				if !isCompleteEvent(ev) {
+					val = reducefn(val, ev)
+					res.publish(val)
+				} else {
+					res.publish(ev)
+				}
 			}
 		}
 		log.Println("DEBUG: Closing Reduce()")
@@ -195,7 +212,7 @@ func (s *Stream) Filter(filterfn FilterFunc) *Stream {
 
 	go func() {
 		for ev := range res.in {
-			if ev != nil && filterfn(ev) {
+			if (ev != nil && filterfn(ev)) || isCompleteEvent(ev) {
 				res.publish(ev)
 			}
 		}
