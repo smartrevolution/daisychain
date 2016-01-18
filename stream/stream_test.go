@@ -149,6 +149,60 @@ func TestFilter(t *testing.T) {
 	}
 }
 
+func TestCompleteBehavior(t *testing.T) {
+	t.Parallel()
+
+	//GIVEN
+	s0 := New()
+
+	var wg sync.WaitGroup
+
+	//WHEN/THEN
+	//map should not see complete events
+	s1 := s0.Map(func(ev Event) Event {
+		switch ev.(type) {
+		case CompleteEvent:
+			t.Error("Map: Did not expect this event:", ev)
+		default:
+			t.Log("Map", ev)
+		}
+		return ev
+	})
+
+	//reduce should not see complete events
+	s2 := s1.Reduce(func(left, right Event) Event {
+		switch right.(type) {
+		case CompleteEvent:
+			t.Error("Reduce: Did not expect this event:", right)
+		default:
+			t.Log("Reduce", right)
+		}
+		return right
+	}, 0)
+
+	//filter "sees" complete events
+	s3 := s2.Filter(func(ev Event) bool {
+		switch ev.(type) {
+		case CompleteEvent:
+			wg.Done() // filter "sees" complete events
+		default:
+			t.Log("Filter", ev)
+		}
+		return true
+	})
+
+	wg.Add(2)
+	signal := s3.Hold(0)
+	signal.OnComplete(func(ev Event) {
+		wg.Done()
+	})
+
+	s0.From(0, 1, 2)
+	s0.Send(Complete())
+
+	wg.Wait()
+}
+
 func TestThrottle(t *testing.T) {
 	t.Parallel()
 
