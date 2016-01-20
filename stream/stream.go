@@ -340,7 +340,7 @@ type group map[string][]Event
 // that is returned by applying KeyFunc to the event.
 func (s *Stream) GroupBy(keyfn KeyFunc) *Signal {
 	res := newSignal()
-	res.initVal = make(group)
+	res.initVal = make(map[string][]Event)
 	res.event = res.initVal
 
 	s.subscribe(res.parent)
@@ -356,7 +356,7 @@ func (s *Stream) GroupBy(keyfn KeyFunc) *Signal {
 			default:
 				res.initialized = true
 				key := keyfn(ev)
-				(res.event.(group))[key] = append(res.event.(group)[key], ev)
+				(res.event.(map[string][]Event))[key] = append(res.event.(map[string][]Event)[key], ev)
 				res.values.publish(res.event)
 			}
 			res.Unlock()
