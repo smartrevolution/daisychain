@@ -371,6 +371,133 @@ func (s *Stream) Subscribe(onValue, onError, onComplete CallbackFunc) *Stream {
 	return res
 }
 
+func (s *Stream) Collect() *Stream {
+	res := newStream()
+	s.subscribe(res)
+
+	go func() {
+		var event []Event
+		for ev := range res.in {
+			switch ev.(type) {
+			case ErrorEvent:
+				res.RLock()
+				res.publish(ev)
+				res.RUnlock()
+			case CompleteEvent:
+				res.RLock()
+				res.publish(ev)
+				res.RUnlock()
+			default:
+				res.Lock()
+				event = append(event, ev)
+				res.Unlock()
+
+				res.RLock()
+				res.publish(event)
+				res.RUnlock()
+			}
+		}
+		log.Println("DEBUG: Closing Collect1()")
+	}()
+	return res
+}
+
+type KeyFunc func(ev Event) string
+
+func (s *Stream) GroupBy(keyfn KeyFunc) *Stream {
+	res := newStream()
+	s.subscribe(res)
+
+	go func() {
+		event := make(map[string][]Event)
+		for ev := range res.in {
+			switch ev.(type) {
+			case ErrorEvent:
+				res.RLock()
+				res.publish(ev)
+				res.RUnlock()
+			case CompleteEvent:
+				res.RLock()
+				res.publish(ev)
+				res.RUnlock()
+			default:
+				key := keyfn(ev)
+				res.Lock()
+				event[key] = append(event[key], ev) //FIXME: Check is this works
+				res.Unlock()
+				res.RLock()
+				res.publish(event)
+				res.RUnlock()
+			}
+		}
+		log.Println("DEBUG: Closing GroupBy0()")
+	}()
+	return res
+}
+
+func (s *Stream) Distinct(keyfn KeyFunc) *Stream {
+	res := newStream()
+	s.subscribe(res)
+
+	go func() {
+		event := make(map[string]Event)
+		for ev := range res.in {
+			switch ev.(type) {
+			case ErrorEvent:
+				res.RLock()
+				res.publish(ev)
+				res.RUnlock()
+			case CompleteEvent:
+				res.RLock()
+				res.publish(ev)
+				res.RUnlock()
+			default:
+				key := keyfn(ev)
+				res.Lock()
+				event[key] = ev
+				res.Unlock()
+				res.RLock()
+				res.publish(event)
+				res.RUnlock()
+			}
+		}
+		log.Println("DEBUG: Closing Distinct0()")
+	}()
+	return res
+}
+
+// Signal is a value that changes over time.
+type Signal struct {
+	sync.RWMutex
+	parent      *Stream
+	event       Event
+	initVal     Event
+	initialized bool
+	values      observers
+	errors      observers
+	completed   observers
+}
+
+func newSignal() *Signal {
+	return &Signal{
+		parent:      newStream(),
+		initialized: true,
+		values:      make(observers),
+		errors:      make(observers),
+		completed:   make(observers),
+	}
+}
+
+func (s *Signal) Stream() *Stream {
+	s.RLock()
+	defer s.RUnlock()
+	return s.parent
+}
+
+func (s *Signal) Close() {
+	s.parent.root.Close()
+}
+
 // Hold generates a Signal from a stream.
 // The signal always holds the last event from the stream.
 func (s *Stream) Hold(initVal Event) *Signal {
@@ -409,157 +536,118 @@ func (s *Stream) Hold(initVal Event) *Signal {
 	return res
 }
 
-// Collect collects all events from a stream.
-// It appends these events internally to an []Event,
-// which it also passes asynchronuously to the CallbackFunc any time
-// a new event arrives.
-func (s *Stream) Collect() *Signal {
-	res := newSignal()
-	res.initVal = []Event{}
-	res.event = res.initVal
+// Collect is deprecated
+// func (s *Stream) Collect() *Signal {
+// 	res := newSignal()
+// 	res.initVal = []Event{}
+// 	res.event = res.initVal
 
-	s.subscribe(res.parent)
+// 	s.subscribe(res.parent)
 
-	go func() {
-		for ev := range res.parent.in {
-			switch ev.(type) {
-			case ErrorEvent:
-				res.RLock()
-				res.parent.publish(ev)
-				res.errors.publish(ev)
-				res.RUnlock()
-			case CompleteEvent:
-				res.RLock()
-				res.parent.publish(ev)
-				res.completed.publish(res.event)
-				res.RUnlock()
-			default:
-				res.Lock()
-				res.initialized = true
-				res.event = append(res.event.([]Event), ev)
-				res.Unlock()
-				res.RLock()
-				res.parent.publish(res.event)
-				res.values.publish(res.event)
-				res.RUnlock()
-			}
-		}
-		log.Println("DEBUG: Closing Collect()")
-	}()
-	return res
-}
+// 	go func() {
+// 		for ev := range res.parent.in {
+// 			switch ev.(type) {
+// 			case ErrorEvent:
+// 				res.RLock()
+// 				res.parent.publish(ev)
+// 				res.errors.publish(ev)
+// 				res.RUnlock()
+// 			case CompleteEvent:
+// 				res.RLock()
+// 				res.parent.publish(ev)
+// 				res.completed.publish(res.event)
+// 				res.RUnlock()
+// 			default:
+// 				res.Lock()
+// 				res.initialized = true
+// 				res.event = append(res.event.([]Event), ev)
+// 				res.Unlock()
+// 				res.RLock()
+// 				res.parent.publish(res.event)
+// 				res.values.publish(res.event)
+// 				res.RUnlock()
+// 			}
+// 		}
+// 		log.Println("DEBUG: Closing Collect()")
+// 	}()
+// 	return res
+// }
 
-type KeyFunc func(ev Event) string
+// GroupBy is deprecated
+// func (s *Stream) GroupBy(keyfn KeyFunc) *Signal {
+// 	res := newSignal()
+// 	res.initVal = make(map[string][]Event)
+// 	res.event = res.initVal
 
-// GroupBy collects all events under the string key
-// that is returned by applying KeyFunc to the event.
-func (s *Stream) GroupBy(keyfn KeyFunc) *Signal {
-	res := newSignal()
-	res.initVal = make(map[string][]Event)
-	res.event = res.initVal
+// 	s.subscribe(res.parent)
 
-	s.subscribe(res.parent)
+// 	go func() {
+// 		for ev := range res.parent.in {
+// 			switch ev.(type) {
+// 			case ErrorEvent:
+// 				res.RLock()
+// 				res.parent.publish(ev)
+// 				res.errors.publish(ev)
+// 				res.RUnlock()
+// 			case CompleteEvent:
+// 				res.RLock()
+// 				res.parent.publish(ev)
+// 				res.completed.publish(res.event)
+// 				res.RUnlock()
+// 			default:
+// 				key := keyfn(ev)
+// 				res.Lock()
+// 				res.initialized = true
+// 				(res.event.(map[string][]Event))[key] = append(res.event.(map[string][]Event)[key], ev)
+// 				res.Unlock()
+// 				res.RLock()
+// 				res.parent.publish(res.event)
+// 				res.values.publish(res.event)
+// 				res.RUnlock()
+// 			}
+// 		}
+// 		log.Println("DEBUG: Closing GroupBy()")
+// 	}()
+// 	return res
+// }
 
-	go func() {
-		for ev := range res.parent.in {
-			switch ev.(type) {
-			case ErrorEvent:
-				res.RLock()
-				res.parent.publish(ev)
-				res.errors.publish(ev)
-				res.RUnlock()
-			case CompleteEvent:
-				res.RLock()
-				res.parent.publish(ev)
-				res.completed.publish(res.event)
-				res.RUnlock()
-			default:
-				key := keyfn(ev)
-				res.Lock()
-				res.initialized = true
-				(res.event.(map[string][]Event))[key] = append(res.event.(map[string][]Event)[key], ev)
-				res.Unlock()
-				res.RLock()
-				res.parent.publish(res.event)
-				res.values.publish(res.event)
-				res.RUnlock()
-			}
-		}
-		log.Println("DEBUG: Closing GroupBy()")
-	}()
-	return res
-}
+// Distinct is deprecated
+// func (s *Stream) Distinct(keyfn KeyFunc) *Signal {
+// 	res := newSignal()
+// 	res.initVal = make(map[string]Event)
+// 	res.event = res.initVal
 
-// Distinct collects unique events under the string key
-// that is returned by applying KeyFunc to the event.
-func (s *Stream) Distinct(keyfn KeyFunc) *Signal {
-	res := newSignal()
-	res.initVal = make(map[string]Event)
-	res.event = res.initVal
+// 	s.subscribe(res.parent)
 
-	s.subscribe(res.parent)
-
-	go func() {
-		for ev := range res.parent.in {
-			switch ev.(type) {
-			case ErrorEvent:
-				res.RLock()
-				res.parent.publish(ev)
-				res.errors.publish(ev)
-				res.RUnlock()
-			case CompleteEvent:
-				res.RLock()
-				res.parent.publish(ev)
-				res.completed.publish(res.event)
-				res.RUnlock()
-			default:
-				key := keyfn(ev)
-				res.Lock()
-				res.initialized = true
-				(res.event.(map[string]Event))[key] = ev
-				res.Unlock()
-				res.RLock()
-				res.parent.publish(res.event)
-				res.values.publish(res.event)
-				res.RUnlock()
-			}
-		}
-		log.Println("DEBUG: Closing Distinct()")
-	}()
-	return res
-}
-
-// Signal is a value that changes over time.
-type Signal struct {
-	sync.RWMutex
-	parent      *Stream
-	event       Event
-	initVal     Event
-	initialized bool
-	values      observers
-	errors      observers
-	completed   observers
-}
-
-func newSignal() *Signal {
-	return &Signal{
-		parent:      newStream(),
-		initialized: true,
-		values:      make(observers),
-		errors:      make(observers),
-		completed:   make(observers),
-	}
-}
-
-func (s *Signal) Stream() *Stream {
-	s.RLock()
-	defer s.RUnlock()
-	return s.parent
-}
-
-func (s *Signal) Close() {
-	s.parent.root.Close()
-}
+// 	go func() {
+// 		for ev := range res.parent.in {
+// 			switch ev.(type) {
+// 			case ErrorEvent:
+// 				res.RLock()
+// 				res.parent.publish(ev)
+// 				res.errors.publish(ev)
+// 				res.RUnlock()
+// 			case CompleteEvent:
+// 				res.RLock()
+// 				res.parent.publish(ev)
+// 				res.completed.publish(res.event)
+// 				res.RUnlock()
+// 			default:
+// 				key := keyfn(ev)
+// 				res.Lock()
+// 				res.initialized = true
+// 				(res.event.(map[string]Event))[key] = ev
+// 				res.Unlock()
+// 				res.RLock()
+// 				res.parent.publish(res.event)
+// 				res.values.publish(res.event)
+// 				res.RUnlock()
+// 			}
+// 		}
+// 		log.Println("DEBUG: Closing Distinct()")
+// 	}()
+// 	return res
+// }
 
 type Subscription *CallbackFunc
 type observers map[Subscription]CallbackFunc

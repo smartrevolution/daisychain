@@ -28,7 +28,7 @@ func Example() {
 	n1 := s1.Hold(0)
 	n2 := s2.Hold(0)
 	n3 := s3.Hold(0)
-	n4 := s3.Collect()
+	n4 := s3.Collect().Hold(stream.Empty())
 
 	keyfn := func(ev stream.Event) string {
 		if ev.(int)%2 == 0 {
@@ -37,7 +37,7 @@ func Example() {
 		return "odd"
 	}
 
-	n5 := s1.GroupBy(keyfn)
+	n5 := s1.GroupBy(keyfn).Hold(stream.Empty())
 
 	//WHEN
 	s0.From(0, 1, 2, 3, 4, 5, 6, 7, 8, 9)

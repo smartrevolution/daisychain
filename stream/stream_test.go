@@ -278,7 +278,8 @@ func TestCollect(t *testing.T) {
 
 	//GIVEN
 	sink := New()
-	signal := sink.Collect()
+	collected := sink.Collect()
+	signal := collected.Hold(Empty())
 
 	//WHEN
 	sink.From(0, 1, 2, 3, 4, 5, 6, 7, 8, 9)
@@ -296,12 +297,13 @@ func TestGroupBy(t *testing.T) {
 
 	//GIVEN
 	sink := New()
-	signal := sink.GroupBy(func(ev Event) string {
+	grouped := sink.GroupBy(func(ev Event) string {
 		if ev.(int)%2 == 0 {
 			return "even"
 		}
 		return "odd"
 	})
+	signal := grouped.Hold(Empty())
 
 	//WHEN
 	sink.From(0, 1, 2, 3, 4, 5, 6, 7, 8, 9)
@@ -324,7 +326,6 @@ func TestDistinct(t *testing.T) {
 		}
 		return "odd"
 	}).
-		Stream().
 		Subscribe(nil, nil, func(ev Event) {
 		if evenOdd, ok := ev.(map[string]Event); !ok && len(evenOdd) != 2 {
 			t.Log(evenOdd)
@@ -587,6 +588,24 @@ func TestHoldAsStream(t *testing.T) {
 		From(1, 2, 3)
 
 	time.Sleep(50 * time.Millisecond)
+}
+
+func TestHoldCollectAsStream(t *testing.T) {
+	sink := New()
+	mapped := sink.Map(func(ev Event) Event {
+		return ev.(int) * ev.(int)
+	})
+	collected := mapped.Collect()
+
+	collected.Subscribe(func(ev Event) {
+		t.Log(ev)
+	}, nil, nil)
+
+	signal := collected.Hold(Empty())
+	sink.From(1, 2, 3)
+
+	time.Sleep(10 * time.Millisecond)
+	t.Log(signal.Value())
 }
 
 func TestNoSignal(t *testing.T) {
