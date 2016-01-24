@@ -171,9 +171,9 @@ type FeederFunc func(s *Sink)
 //Feed starts FeederFunc as a go routine.
 //FeederFunc has access to the root *Sink of this *Signal.
 //It returns the method receiver *Signal for easy chaining.
-func (s *Stream) Feed(feeder FeederFunc) *Stream {
-	s.RUnlock()
-	defer s.RUnlock()
+func (s *Stream) Connect(feeder FeederFunc) *Stream {
+	// s.RUnlock()
+	// defer s.RUnlock()
 	go feeder(s.root)
 	return s
 }
@@ -346,24 +346,24 @@ func (s *Stream) Subscribe(onValue, onError, onComplete CallbackFunc) *Stream {
 	s.subscribe(res)
 
 	go func() {
+		lastValue := Empty()
 		for ev := range res.in {
 			switch ev.(type) {
 			case ErrorEvent:
 				if onError != nil {
 					go onError(ev)
 				}
-				res.publish(ev)
 			case CompleteEvent:
 				if onComplete != nil {
-					go onComplete(ev)
+					go onComplete(lastValue)
 				}
-				res.publish(ev)
 			default:
 				if onValue != nil {
 					go onValue(ev)
 				}
-				res.publish(ev)
+				lastValue = ev
 			}
+			res.publish(ev)
 		}
 		log.Println("DEBUG: Closing Subscribe()")
 	}()
@@ -382,18 +382,27 @@ func (s *Stream) Hold(initVal Event) *Signal {
 
 	go func() {
 		for ev := range res.parent.in {
-			res.Lock()
 			switch ev.(type) {
 			case ErrorEvent:
+				res.RLock()
+				res.parent.publish(ev)
 				res.errors.publish(ev)
+				res.RUnlock()
 			case CompleteEvent:
-				res.completed.publish(ev)
+				res.RLock()
+				res.parent.publish(ev)
+				res.completed.publish(res.event)
+				res.RUnlock()
 			default:
+				res.Lock()
 				res.initialized = true
 				res.event = ev
+				res.Unlock()
+				res.RLock()
+				res.parent.publish(res.event)
 				res.values.publish(res.event)
+				res.RUnlock()
 			}
-			res.Unlock()
 		}
 		log.Println("DEBUG: Closing Hold()")
 	}()
@@ -413,18 +422,27 @@ func (s *Stream) Collect() *Signal {
 
 	go func() {
 		for ev := range res.parent.in {
-			res.Lock()
 			switch ev.(type) {
 			case ErrorEvent:
+				res.RLock()
+				res.parent.publish(ev)
 				res.errors.publish(ev)
+				res.RUnlock()
 			case CompleteEvent:
-				res.completed.publish(ev)
+				res.RLock()
+				res.parent.publish(ev)
+				res.completed.publish(res.event)
+				res.RUnlock()
 			default:
+				res.Lock()
 				res.initialized = true
 				res.event = append(res.event.([]Event), ev)
+				res.Unlock()
+				res.RLock()
+				res.parent.publish(res.event)
 				res.values.publish(res.event)
+				res.RUnlock()
 			}
-			res.Unlock()
 		}
 		log.Println("DEBUG: Closing Collect()")
 	}()
@@ -444,19 +462,28 @@ func (s *Stream) GroupBy(keyfn KeyFunc) *Signal {
 
 	go func() {
 		for ev := range res.parent.in {
-			res.Lock()
 			switch ev.(type) {
 			case ErrorEvent:
+				res.RLock()
+				res.parent.publish(ev)
 				res.errors.publish(ev)
+				res.RUnlock()
 			case CompleteEvent:
-				res.completed.publish(ev)
+				res.RLock()
+				res.parent.publish(ev)
+				res.completed.publish(res.event)
+				res.RUnlock()
 			default:
-				res.initialized = true
 				key := keyfn(ev)
+				res.Lock()
+				res.initialized = true
 				(res.event.(map[string][]Event))[key] = append(res.event.(map[string][]Event)[key], ev)
+				res.Unlock()
+				res.RLock()
+				res.parent.publish(res.event)
 				res.values.publish(res.event)
+				res.RUnlock()
 			}
-			res.Unlock()
 		}
 		log.Println("DEBUG: Closing GroupBy()")
 	}()
@@ -474,19 +501,28 @@ func (s *Stream) Distinct(keyfn KeyFunc) *Signal {
 
 	go func() {
 		for ev := range res.parent.in {
-			res.Lock()
 			switch ev.(type) {
 			case ErrorEvent:
+				res.RLock()
+				res.parent.publish(ev)
 				res.errors.publish(ev)
+				res.RUnlock()
 			case CompleteEvent:
-				res.completed.publish(ev)
+				res.RLock()
+				res.parent.publish(ev)
+				res.completed.publish(res.event)
+				res.RUnlock()
 			default:
-				res.initialized = true
 				key := keyfn(ev)
+				res.Lock()
+				res.initialized = true
 				(res.event.(map[string]Event))[key] = ev
+				res.Unlock()
+				res.RLock()
+				res.parent.publish(res.event)
 				res.values.publish(res.event)
+				res.RUnlock()
 			}
-			res.Unlock()
 		}
 		log.Println("DEBUG: Closing Distinct()")
 	}()

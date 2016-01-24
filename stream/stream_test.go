@@ -18,7 +18,7 @@ func xTestFinalizer(t *testing.T) {
 }
 
 func TestClose(t *testing.T) {
-	t.Parallel()
+	//t.Parallel()
 
 	//Close() Sink
 	sink := New()
@@ -44,7 +44,7 @@ func TestClose(t *testing.T) {
 }
 
 func TestSubscribers(t *testing.T) {
-	t.Parallel()
+	//t.Parallel()
 	//GIVEN
 	parent := newStream()
 	child := newStream()
@@ -67,7 +67,7 @@ func TestSubscribers(t *testing.T) {
 }
 
 func TestNew(t *testing.T) {
-	t.Parallel()
+	//t.Parallel()
 
 	//GIVEN
 	sink := New()
@@ -84,7 +84,7 @@ func TestNew(t *testing.T) {
 }
 
 func TestMap(t *testing.T) {
-	t.Parallel()
+	//t.Parallel()
 
 	//GIVEN
 	sink := New()
@@ -106,7 +106,7 @@ func TestMap(t *testing.T) {
 }
 
 func TestReduce(t *testing.T) {
-	t.Parallel()
+	//t.Parallel()
 
 	//GIVEN
 	sink := New()
@@ -128,7 +128,7 @@ func TestReduce(t *testing.T) {
 }
 
 func TestFilter(t *testing.T) {
-	t.Parallel()
+	//t.Parallel()
 
 	//GIVEN
 	sink := New()
@@ -150,7 +150,7 @@ func TestFilter(t *testing.T) {
 }
 
 func TestCompleteBehavior(t *testing.T) {
-	t.Parallel()
+	//t.Parallel()
 
 	//GIVEN
 	s0 := New()
@@ -204,7 +204,7 @@ func TestCompleteBehavior(t *testing.T) {
 }
 
 func TestThrottle(t *testing.T) {
-	t.Parallel()
+	//t.Parallel()
 
 	//GIVEN
 	sink := New()
@@ -230,7 +230,7 @@ func TestThrottle(t *testing.T) {
 }
 
 func TestMerge(t *testing.T) {
-	t.Parallel()
+	//t.Parallel()
 
 	//GIVEN
 	s0 := New()
@@ -274,7 +274,7 @@ func TestMerge(t *testing.T) {
 }
 
 func TestCollect(t *testing.T) {
-	t.Parallel()
+	//t.Parallel()
 
 	//GIVEN
 	sink := New()
@@ -292,7 +292,7 @@ func TestCollect(t *testing.T) {
 }
 
 func TestGroupBy(t *testing.T) {
-	t.Parallel()
+	//t.Parallel()
 
 	//GIVEN
 	sink := New()
@@ -315,30 +315,28 @@ func TestGroupBy(t *testing.T) {
 }
 
 func TestDistinct(t *testing.T) {
-	t.Parallel()
+	//	//t.Parallel()
 
-	//GIVEN
-	sink := New()
-	signal := sink.Distinct(func(ev Event) string {
+	New().
+		Distinct(func(ev Event) string {
 		if ev.(int)%2 == 0 {
 			return "even"
 		}
 		return "odd"
-	})
+	}).
+		Stream().
+		Subscribe(nil, nil, func(ev Event) {
+		if evenOdd, ok := ev.(map[string]Event); !ok && len(evenOdd) != 2 {
+			t.Log(evenOdd)
+			t.Errorf("Expected: map[even:8 odd:9], Got: %#v", evenOdd)
+		}
+	}).
+		From(0, 1, 2, 3, 4, 5, 6, 7, 8, 9)
 
-	//WHEN
-	sink.From(0, 1, 2, 3, 4, 5, 6, 7, 8, 9)
-	time.Sleep(5 * time.Millisecond)
-
-	//THEN
-	if evenOdd, ok := signal.Value().(map[string]Event); len(evenOdd) != 2 || !ok {
-		t.Log(signal.Value())
-		t.Errorf("Expected: map[even:8 odd:9], Got: %#v", evenOdd)
-	}
 }
 
-func TestSignalOnChange(t *testing.T) {
-	t.Parallel()
+func xTestSignalOnChange(t *testing.T) {
+	//t.Parallel()
 	var wg sync.WaitGroup
 
 	//GIVEN
@@ -439,7 +437,7 @@ func TestSignalOnChange(t *testing.T) {
 }
 
 func TestReset(t *testing.T) {
-	t.Parallel()
+	//t.Parallel()
 
 	var wg sync.WaitGroup
 	wg.Add(2)
@@ -481,7 +479,7 @@ func TestReset(t *testing.T) {
 }
 
 func TestEmptyHandling(t *testing.T) {
-	t.Parallel()
+	//t.Parallel()
 
 	//GIVEN
 	sink := New()
@@ -525,7 +523,7 @@ func (e estimation) String() string {
 }
 
 func TestReduceWithStruct(t *testing.T) {
-	t.Parallel()
+	//t.Parallel()
 
 	//GIVEN
 	empty := estimation{
@@ -569,6 +567,26 @@ func TestReduceWithStruct(t *testing.T) {
 	if est := sum.Value().(estimation); est.min != 6 && est.max != 9 {
 		t.Error("Expected: 6-9, Got:", est)
 	}
+}
+
+func TestHoldAsStream(t *testing.T) {
+	New().
+		Map(func(ev Event) Event {
+		return ev.(int) * ev.(int)
+	}).
+		Hold(0).
+		Stream().
+		Reduce(func(e1, e2 Event) Event {
+		return e1.(int) + e2.(int)
+	}, 0).
+		Subscribe(func(ev Event) {
+		if val, _ := ev.(int); val != 1 && val != 5 && val != 14 {
+			t.Error(val)
+		}
+	}, nil, nil).
+		From(1, 2, 3)
+
+	time.Sleep(50 * time.Millisecond)
 }
 
 func TestNoSignal(t *testing.T) {
