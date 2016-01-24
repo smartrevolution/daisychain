@@ -117,9 +117,14 @@ func New() *Sink {
 }
 
 func (s *Sink) From(evts ...Event) {
-	for ev := range evts {
+	for _, ev := range evts {
 		s.Send(ev)
 	}
+}
+
+func (s *Sink) Just(evts ...Event) {
+	s.From(evts...)
+	s.Complete()
 }
 
 func (s *Sink) Close() {
@@ -130,6 +135,21 @@ func (s *Sink) Close() {
 // Send sends an Event from a Sink down the stream
 func (s *Sink) Send(ev Event) {
 	s.in <- ev
+}
+
+// Send sends a CompleteEvent from a Sink down the stream
+func (s *Sink) Complete() {
+	s.in <- Complete()
+}
+
+// Send sends an ErrorEvent from a Sink down the stream
+func (s *Sink) Error(msg string) {
+	s.in <- Error(msg)
+}
+
+// Send sends an EmptyEvent from a Sink down the stream
+func (s *Sink) Empty() {
+	s.in <- Empty()
 }
 
 // send sends an Event down the stream.
@@ -144,6 +164,29 @@ func (s *Stream) close() {
 		child.close()
 		close(child.in)
 	}
+}
+
+type FeederFunc func(s *Sink)
+
+//Feed starts FeederFunc as a go routine.
+//FeederFunc has access to the root *Sink of this *Signal.
+//It returns the method receiver *Signal for easy chaining.
+func (s *Stream) Feed(feeder FeederFunc) *Stream {
+	s.RUnlock()
+	defer s.RUnlock()
+	go feeder(s.root)
+	return s
+}
+
+func (s *Stream) From(evts ...Event) {
+	for _, ev := range evts {
+		s.root.Send(ev)
+	}
+}
+
+func (s *Stream) Just(evts ...Event) {
+	s.From(evts...)
+	s.root.Complete()
 }
 
 func isCompleteEvent(ev Event) bool {
@@ -205,7 +248,7 @@ func (s *Stream) Reduce(reducefn ReduceFunc, init Event) *Stream {
 // FilterFunc is the function signature used by Filter().
 type FilterFunc func(Event) bool
 
-// Filter only fires en event, when the FilterFunc returns true.
+// Filter only fires an event, when the FilterFunc returns true.
 func (s *Stream) Filter(filterfn FilterFunc) *Stream {
 	res := newStream()
 	s.subscribe(res)
@@ -217,6 +260,30 @@ func (s *Stream) Filter(filterfn FilterFunc) *Stream {
 			}
 		}
 		log.Println("DEBUG: Closing Filter()")
+	}()
+
+	return res
+}
+
+type LookupFunc func(ev Event, signal *Signal) Event
+
+// Lookup
+func (s *Stream) Lookup(lookupfn LookupFunc, signal *Signal) *Stream {
+	res := newStream()
+	s.subscribe(res)
+
+	go func() {
+		for ev := range res.in {
+			if ev != nil {
+				if !isCompleteEvent(ev) {
+					val := lookupfn(ev, signal)
+					res.publish(val)
+				} else {
+					res.publish(ev)
+				}
+			}
+		}
+		log.Println("DEBUG: Closing Lookup()")
 	}()
 
 	return res
@@ -268,6 +335,37 @@ func (s *Stream) Throttle(d time.Duration) *Stream {
 			}
 		}
 		log.Println("DEBUG: Closing Trottle()")
+	}()
+
+	return res
+}
+
+// Subscribe
+func (s *Stream) Subscribe(onValue, onError, onComplete CallbackFunc) *Stream {
+	res := newStream()
+	s.subscribe(res)
+
+	go func() {
+		for ev := range res.in {
+			switch ev.(type) {
+			case ErrorEvent:
+				if onError != nil {
+					go onError(ev)
+				}
+				res.publish(ev)
+			case CompleteEvent:
+				if onComplete != nil {
+					go onComplete(ev)
+				}
+				res.publish(ev)
+			default:
+				if onValue != nil {
+					go onValue(ev)
+				}
+				res.publish(ev)
+			}
+		}
+		log.Println("DEBUG: Closing Subscribe()")
 	}()
 
 	return res
@@ -334,7 +432,6 @@ func (s *Stream) Collect() *Signal {
 }
 
 type KeyFunc func(ev Event) string
-type group map[string][]Event
 
 // GroupBy collects all events under the string key
 // that is returned by applying KeyFunc to the event.
@@ -416,6 +513,12 @@ func newSignal() *Signal {
 		errors:      make(observers),
 		completed:   make(observers),
 	}
+}
+
+func (s *Signal) Stream() *Stream {
+	s.RLock()
+	defer s.RUnlock()
+	return s.parent
 }
 
 func (s *Signal) Close() {

@@ -308,7 +308,7 @@ func TestGroupBy(t *testing.T) {
 	time.Sleep(5 * time.Millisecond)
 
 	//THEN
-	if evenOdd, ok := signal.Value().(group); len(evenOdd) != 2 || !ok {
+	if evenOdd, ok := signal.Value().(map[string][]Event); len(evenOdd) != 2 || !ok {
 		t.Log(signal.Value())
 		t.Errorf("Expected: map[even:[0 2 4 6 8] odd:[1 3 5 7 9]], Got: %#v", evenOdd)
 	}
@@ -569,4 +569,27 @@ func TestReduceWithStruct(t *testing.T) {
 	if est := sum.Value().(estimation); est.min != 6 && est.max != 9 {
 		t.Error("Expected: 6-9, Got:", est)
 	}
+}
+
+func TestNoSignal(t *testing.T) {
+	New().
+		Map(func(ev Event) Event {
+		return ev.(int) * ev.(int)
+	}).
+		Subscribe(func(ev Event) {
+		if val, _ := ev.(int); val != 1 && val != 4 && val != 9 {
+			t.Error(val)
+		}
+	}, nil, nil).
+		Reduce(func(e1, e2 Event) Event {
+		return e1.(int) + e2.(int)
+	}, 0).
+		Subscribe(func(ev Event) {
+		if val, _ := ev.(int); val != 1 && val != 5 && val != 14 {
+			t.Error(val)
+		}
+	}, nil, nil).
+		From(1, 2, 3)
+
+	time.Sleep(50 * time.Millisecond)
 }
