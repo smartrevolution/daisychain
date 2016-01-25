@@ -586,7 +586,7 @@ func TestHoldAsO(t *testing.T) {
 		return ev.(int) * ev.(int)
 	}).
 		Hold(0).
-		O().
+		Observable().
 		Reduce(func(e1, e2 Event) Event {
 		return e1.(int) + e2.(int)
 	}, 0).
