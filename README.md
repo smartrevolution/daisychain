@@ -1,18 +1,20 @@
 # Streams of computations
 
-* Use stream.New() to create a new Stream.
-* Use Map, Reduce, Filter to manipulate the stream.
+* Use Observable.New() to create a new Observable.
+* Use Map(), FlatMap(), Reduce(), Filter() operators.
 * You can create trees of computations out of these operators.
-* Use Send() and From() to push data into the stream tree.
-* Use Hold(), Collect(), Distinct() to create a signal of values.
+* Use Send(), From(), Just() and Connect() to compute data.
+* Use Collect(), GroupBy(), Distinct() to aggregate Events.
+* Use Subscribe() to Subscibe OnValue, OnError and OnComplete.
+* Usr Hold() to create a Signal. A Signal is a value changing over time.
 * Attach callbacks to Signals with OnValue(), OnEmpty() and OnError() or use Value() to access the results of your computations.
 
 
 ```go
-package stream_test
+package observable_test
 
 import (
-	"github.com/smartrevolution/daisychain/stream"
+	"github.com/smartrevolution/daisychain/observable"
 
 	"fmt"
 	"time"
@@ -20,18 +22,18 @@ import (
 
 func Example() {
 	//GIVEN
-	s0 := stream.New()
+	s0 := observable.New()
 	defer s0.Close()
 
-	s1 := s0.Map(func(ev stream.Event) stream.Event {
+	s1 := s0.Map(func(ev observable.Event) observable.Event {
 		return ev.(int) * 2
 	})
 
-	s2 := s1.Reduce(func(left, right stream.Event) stream.Event {
+	s2 := s1.Reduce(func(left, right observable.Event) observable.Event {
 		return left.(int) + right.(int)
 	}, 0)
 
-	s3 := s2.Filter(func(ev stream.Event) bool {
+	s3 := s2.Filter(func(ev observable.Event) bool {
 		return ev.(int) > 50
 	})
 
@@ -39,16 +41,16 @@ func Example() {
 	n1 := s1.Hold(0)
 	n2 := s2.Hold(0)
 	n3 := s3.Hold(0)
-	n4 := s3.Collect()
+	n4 := s3.Collect().Hold(0)
 
-	keyfn := func(ev stream.Event) string {
+	keyfn := func(ev observable.Event) string {
 		if ev.(int)%2 == 0 {
 			return "even"
 		}
 		return "odd"
 	}
 
-	n5 := s1.GroupBy(keyfn)
+	n5 := s1.GroupBy(keyfn).Hold(0)
 
 	//WHEN
 	s0.From(0, 1, 2, 3, 4, 5, 6, 7, 8, 9)
