@@ -67,15 +67,15 @@ type Stream struct {
 	sync.RWMutex
 	in   chan Event
 	subs subscribers
-	root *Sink
+	root *Observable
 }
 
 func (s *Stream) Close() {
 	s.root.Close()
 }
 
-// Sink is the first node of a stream.
-type Sink struct {
+// Observable is the first node of a stream.
+type Observable struct {
 	*Stream
 }
 
@@ -87,68 +87,68 @@ func newStream() *Stream {
 	}
 }
 
-// newSink is a helper constructor for sinks.
-func newSink() *Sink {
-	sink := &Sink{
+// newObservable is a helper constructor for sinks.
+func newObservable() *Observable {
+	sink := &Observable{
 		Stream: newStream(),
 	}
 	sink.root = sink
 	return sink
 }
 
-// If the runtime discards a Sink, all depending streams are discarded , too.
-func sinkFinalizer(s *Sink) {
+// If the runtime discards a Observable, all depending streams are discarded , too.
+func sinkFinalizer(s *Observable) {
 	log.Println("DEBUG: Called Finalizer")
 	s.close()
 }
 
-// NewSink generates a new Sink.
-func New() *Sink {
-	s := newSink()
+// NewObservable generates a new Observable.
+func New() *Observable {
+	s := newObservable()
 	runtime.SetFinalizer(s, sinkFinalizer)
 	go func() {
 		for ev := range s.in {
 			s.publish(ev)
 		}
-		log.Println("DEBUG: Closing Sink")
+		log.Println("DEBUG: Closing Observable")
 	}()
 
 	return s
 }
 
-func (s *Sink) From(evts ...Event) {
+func (s *Observable) From(evts ...Event) {
 	for _, ev := range evts {
 		s.Send(ev)
 	}
 }
 
-func (s *Sink) Just(evts ...Event) {
+func (s *Observable) Just(evts ...Event) {
 	s.From(evts...)
 	s.Complete()
 }
 
-func (s *Sink) Close() {
+func (s *Observable) Close() {
 	close(s.in)
 	s.close()
 }
 
-// Send sends an Event from a Sink down the stream
-func (s *Sink) Send(ev Event) {
+// Send sends an Event from a Observable down the stream
+func (s *Observable) Send(ev Event) {
 	s.in <- ev
 }
 
-// Send sends a CompleteEvent from a Sink down the stream
-func (s *Sink) Complete() {
+// Send sends a CompleteEvent from a Observable down the stream
+func (s *Observable) Complete() {
 	s.in <- Complete()
 }
 
-// Send sends an ErrorEvent from a Sink down the stream
-func (s *Sink) Error(msg string) {
+// Send sends an ErrorEvent from a Observable down the stream
+func (s *Observable) Error(msg string) {
 	s.in <- Error(msg)
 }
 
-// Send sends an EmptyEvent from a Sink down the stream
-func (s *Sink) Empty() {
+// Send sends an EmptyEvent from a Observable down the stream
+func (s *Observable) Empty() {
 	s.in <- Empty()
 }
 
@@ -166,10 +166,10 @@ func (s *Stream) close() {
 	}
 }
 
-type FeederFunc func(s *Sink)
+type FeederFunc func(s *Observable)
 
 //Feed starts FeederFunc as a go routine.
-//FeederFunc has access to the root *Sink of this *Signal.
+//FeederFunc has access to the root *Observable of this *Signal.
 //It returns the method receiver *Signal for easy chaining.
 func (s *Stream) Connect(feeder FeederFunc) *Stream {
 	// s.RUnlock()

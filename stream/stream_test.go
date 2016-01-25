@@ -20,22 +20,22 @@ func xTestFinalizer(t *testing.T) {
 func TestClose(t *testing.T) {
 	//t.Parallel()
 
-	//Close() Sink
-	sink := New()
-	mapped := sink.Map(func(ev Event) Event {
+	//Close() Observable
+	observable := New()
+	mapped := observable.Map(func(ev Event) Event {
 		return ev //do nothing
 	})
 
-	sink.From(1, 2, 3, 4, 5)
-	sink.Close()
+	observable.From(1, 2, 3, 4, 5)
+	observable.Close()
 
-	sink = New()
-	mapped = sink.Map(func(ev Event) Event {
+	observable = New()
+	mapped = observable.Map(func(ev Event) Event {
 		return ev //do nothing
 	})
 	signal := mapped.Hold(0)
 
-	sink.From(1, 2, 3, 4, 5)
+	observable.From(1, 2, 3, 4, 5)
 	signal.Close()
 	//not a really intelligent test...but it doesn't crash
 	//and that is a good sign. Actually I tested this with more
@@ -70,11 +70,11 @@ func TestNew(t *testing.T) {
 	//t.Parallel()
 
 	//GIVEN
-	sink := New()
-	signal := sink.Hold(0)
+	observable := New()
+	signal := observable.Hold(0)
 
 	//WHEN
-	sink.From(0, 1, 2, 3, 4, 5, 6, 7, 8, 9)
+	observable.From(0, 1, 2, 3, 4, 5, 6, 7, 8, 9)
 	time.Sleep(5 * time.Millisecond)
 
 	//THEN
@@ -87,16 +87,16 @@ func TestMap(t *testing.T) {
 	//t.Parallel()
 
 	//GIVEN
-	sink := New()
+	observable := New()
 
-	squared := sink.Map(func(ev Event) Event {
+	squared := observable.Map(func(ev Event) Event {
 		return ev.(int) * ev.(int)
 	})
 
 	signal := squared.Hold(0)
 
 	//WHEN
-	sink.From(0, 1, 2, 3, 4, 5, 6, 7, 8, 9)
+	observable.From(0, 1, 2, 3, 4, 5, 6, 7, 8, 9)
 	time.Sleep(5 * time.Millisecond)
 
 	//THEN
@@ -109,16 +109,16 @@ func TestReduce(t *testing.T) {
 	//t.Parallel()
 
 	//GIVEN
-	sink := New()
+	observable := New()
 
-	squared := sink.Reduce(func(a, b Event) Event {
+	squared := observable.Reduce(func(a, b Event) Event {
 		return a.(int) + b.(int)
 	}, 100)
 
 	signal := squared.Hold(0)
 
 	//WHEN
-	sink.From(0, 1, 2, 3, 4, 5, 6, 7, 8, 9)
+	observable.From(0, 1, 2, 3, 4, 5, 6, 7, 8, 9)
 	time.Sleep(5 * time.Millisecond)
 
 	//THEN
@@ -131,16 +131,16 @@ func TestFilter(t *testing.T) {
 	//t.Parallel()
 
 	//GIVEN
-	sink := New()
+	observable := New()
 
-	evenNums := sink.Filter(func(ev Event) bool {
+	evenNums := observable.Filter(func(ev Event) bool {
 		return ev.(int)%2 == 0
 	})
 
 	signal := evenNums.Hold(0)
 
 	//WHEN
-	sink.From(0, 1, 2, 3, 4, 5, 6, 7, 8, 9)
+	observable.From(0, 1, 2, 3, 4, 5, 6, 7, 8, 9)
 	time.Sleep(5 * time.Millisecond)
 
 	//THEN
@@ -207,8 +207,8 @@ func TestThrottle(t *testing.T) {
 	//t.Parallel()
 
 	//GIVEN
-	sink := New()
-	mapped := sink.Map(func(ev Event) Event {
+	observable := New()
+	mapped := observable.Map(func(ev Event) Event {
 		return ev
 	})
 	throttled := mapped.Throttle(10 * time.Millisecond)
@@ -223,9 +223,9 @@ func TestThrottle(t *testing.T) {
 	})
 
 	//WHEN
-	sink.Send(1)
-	sink.Send(1)
-	sink.Send(1)
+	observable.Send(1)
+	observable.Send(1)
+	observable.Send(1)
 	time.Sleep(15 * time.Millisecond)
 }
 
@@ -277,12 +277,12 @@ func TestCollect(t *testing.T) {
 	//t.Parallel()
 
 	//GIVEN
-	sink := New()
-	collected := sink.Collect()
+	observable := New()
+	collected := observable.Collect()
 	signal := collected.Hold(Empty())
 
 	//WHEN
-	sink.From(0, 1, 2, 3, 4, 5, 6, 7, 8, 9)
+	observable.From(0, 1, 2, 3, 4, 5, 6, 7, 8, 9)
 	time.Sleep(5 * time.Millisecond)
 
 	//THEN
@@ -296,8 +296,8 @@ func TestGroupBy(t *testing.T) {
 	//t.Parallel()
 
 	//GIVEN
-	sink := New()
-	grouped := sink.GroupBy(func(ev Event) string {
+	observable := New()
+	grouped := observable.GroupBy(func(ev Event) string {
 		if ev.(int)%2 == 0 {
 			return "even"
 		}
@@ -306,7 +306,7 @@ func TestGroupBy(t *testing.T) {
 	signal := grouped.Hold(Empty())
 
 	//WHEN
-	sink.From(0, 1, 2, 3, 4, 5, 6, 7, 8, 9)
+	observable.From(0, 1, 2, 3, 4, 5, 6, 7, 8, 9)
 	time.Sleep(5 * time.Millisecond)
 
 	//THEN
@@ -341,10 +341,10 @@ func xTestSignalOnChange(t *testing.T) {
 	var wg sync.WaitGroup
 
 	//GIVEN
-	sink := New()
+	observable := New()
 
 	//WHEN/THEN
-	signal := sink.Hold(0)
+	signal := observable.Hold(0)
 	values := signal.OnValue(func(ev Event) { //1
 		switch ev.(type) {
 		case ErrorEvent:
@@ -401,10 +401,10 @@ func xTestSignalOnChange(t *testing.T) {
 	})
 
 	wg.Add(4)
-	sink.Send(1)
-	sink.Send(Empty())
-	sink.Send(Error("Testerror"))
-	sink.Send(Complete())
+	observable.Send(1)
+	observable.Send(Empty())
+	observable.Send(Error("Testerror"))
+	observable.Send(Complete())
 	time.Sleep(10 * time.Millisecond)
 	wg.Wait()
 
@@ -444,10 +444,10 @@ func TestReset(t *testing.T) {
 	wg.Add(2)
 
 	//GIVEN
-	sink := New()
+	observable := New()
 
 	//WHEN/THEN
-	signal := sink.Hold(666)
+	signal := observable.Hold(666)
 
 	signal.OnValue(func(ev Event) {
 		t.Log(ev)
@@ -471,9 +471,9 @@ func TestReset(t *testing.T) {
 		wg.Done()
 	})
 
-	sink.Send(1)
+	observable.Send(1)
 	time.Sleep(10 * time.Millisecond)
-	sink.Send(Complete())
+	observable.Send(Complete())
 
 	wg.Wait()
 
@@ -483,10 +483,10 @@ func TestEmptyHandling(t *testing.T) {
 	//t.Parallel()
 
 	//GIVEN
-	sink := New()
+	observable := New()
 
 	//WHEN
-	signal := sink.Hold(666)
+	signal := observable.Hold(666)
 
 	//THEN
 	if val := signal.Value(); val != 666 {
@@ -494,7 +494,7 @@ func TestEmptyHandling(t *testing.T) {
 	}
 
 	//WHEN
-	sink.Send(1)
+	observable.Send(1)
 	time.Sleep(10 * time.Millisecond)
 
 	//THEN
@@ -504,7 +504,7 @@ func TestEmptyHandling(t *testing.T) {
 
 	//WHEN
 	empty := Empty()
-	sink.Send(empty)
+	observable.Send(empty)
 	time.Sleep(10 * time.Millisecond)
 
 	//THEN
@@ -591,8 +591,8 @@ func TestHoldAsStream(t *testing.T) {
 }
 
 func TestHoldCollectAsStream(t *testing.T) {
-	sink := New()
-	mapped := sink.Map(func(ev Event) Event {
+	observable := New()
+	mapped := observable.Map(func(ev Event) Event {
 		return ev.(int) * ev.(int)
 	})
 	collected := mapped.Collect()
@@ -602,7 +602,7 @@ func TestHoldCollectAsStream(t *testing.T) {
 	}, nil, nil)
 
 	signal := collected.Hold(Empty())
-	sink.From(1, 2, 3)
+	observable.From(1, 2, 3)
 
 	time.Sleep(10 * time.Millisecond)
 	t.Log(signal.Value())
