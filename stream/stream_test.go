@@ -2,20 +2,10 @@ package stream
 
 import (
 	"fmt"
-	"runtime"
 	"sync"
 	"testing"
 	"time"
 )
-
-func xTestFinalizer(t *testing.T) {
-	for i := 0; i < 3; i++ {
-		s0 := New()
-		t.Log(s0)
-		time.Sleep(1 * time.Second)
-		runtime.GC()
-	}
-}
 
 func TestClose(t *testing.T) {
 	//t.Parallel()
@@ -103,6 +93,26 @@ func TestMap(t *testing.T) {
 	if val := signal.Value(); val != 81 {
 		t.Error("Expected: 81, Got:", val)
 	}
+}
+
+func TestFlatMap(t *testing.T) {
+	observable := New()
+	mapped := observable.Map(func(ev Event) Event {
+		return ev.(int) * ev.(int)
+	})
+	flatmapped := mapped.FlatMap(func(ev Event) *Observable {
+		observable = New()
+		addOne := observable.Map(func(ev Event) Event {
+			return ev.(int) + 1
+		})
+		return observable
+	})
+	flatmapped.Subscribe(nil, nil, func(ev Event) {
+		if v, ok := ev.(int); v != 2 && v != 5 && v != 10 {
+			t.Error("Expected 2, 5 or 10: Got:", v)
+		}
+	}).Just(1, 2, 3)
+
 }
 
 func TestReduce(t *testing.T) {

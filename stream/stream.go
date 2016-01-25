@@ -219,6 +219,43 @@ func (s *Stream) Map(mapfn MapFunc) *Stream {
 	return res
 }
 
+type FlatMapFunc func(ev Event) *Observable
+
+func (s *Stream) FlatMap(flatmapfn FlatMapFunc) *Stream {
+	res := newStream()
+	s.subscribe(res)
+
+	go func() {
+		for ev := range res.in {
+			if ev != nil {
+				o := flatmapfn(ev)
+				onValue := func(o *Observable) func(ev Event) {
+					return func(ev Event) {
+						res.publish(ev)
+					}
+				}
+				onError := func(o *Observable) func(ev Event) {
+					return func(ev Event) {
+						res.publish(ev)
+						o.Close()
+					}
+				}
+				onComplete := func(o *Observable) func(ev Event) {
+					return func(ev Event) {
+						res.publish(ev)
+						o.Close()
+					}
+				}
+				o.Subscribe(onValue(o), onError(o), onComplete(o))
+				o.Just(ev)
+			}
+		}
+		log.Println("DEBUG: Closing FlatMap()")
+	}()
+
+	return res
+}
+
 //ReduceFunc is the function signature used by Reduce().
 type ReduceFunc func(left, right Event) Event
 
