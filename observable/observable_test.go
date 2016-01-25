@@ -1,26 +1,16 @@
-package stream
+package observable
 
 import (
 	"fmt"
-	"runtime"
 	"sync"
 	"testing"
 	"time"
 )
 
-func xTestFinalizer(t *testing.T) {
-	for i := 0; i < 3; i++ {
-		s0 := New()
-		t.Log(s0)
-		time.Sleep(1 * time.Second)
-		runtime.GC()
-	}
-}
-
 func TestClose(t *testing.T) {
 	//t.Parallel()
 
-	//Close() Observable
+	//Close() O
 	observable := New()
 	mapped := observable.Map(func(ev Event) Event {
 		return ev //do nothing
@@ -46,8 +36,8 @@ func TestClose(t *testing.T) {
 func TestSubscribers(t *testing.T) {
 	//t.Parallel()
 	//GIVEN
-	parent := newStream()
-	child := newStream()
+	parent := newO()
+	child := newO()
 
 	//WHEN
 	parent.subscribe(child)
@@ -103,6 +93,26 @@ func TestMap(t *testing.T) {
 	if val := signal.Value(); val != 81 {
 		t.Error("Expected: 81, Got:", val)
 	}
+}
+
+func TestFlatMap(t *testing.T) {
+	observable := New()
+	mapped := observable.Map(func(ev Event) Event {
+		return ev.(int) * ev.(int)
+	})
+	flatmapped := mapped.FlatMap(func(ev Event) *O {
+		observable = New().
+			Map(func(ev Event) Event {
+			return ev.(int) + 1
+		})
+		return observable
+	})
+	flatmapped.Subscribe(nil, nil, func(ev Event) {
+		if v, ok := ev.(int); !ok && v != 2 && v != 5 && v != 10 {
+			t.Error("Expected 2, 5 or 10: Got:", v)
+		}
+	}).Just(1, 2, 3)
+
 }
 
 func TestReduce(t *testing.T) {
@@ -570,13 +580,13 @@ func TestReduceWithStruct(t *testing.T) {
 	}
 }
 
-func TestHoldAsStream(t *testing.T) {
+func TestHoldAsO(t *testing.T) {
 	New().
 		Map(func(ev Event) Event {
 		return ev.(int) * ev.(int)
 	}).
 		Hold(0).
-		Stream().
+		Observable().
 		Reduce(func(e1, e2 Event) Event {
 		return e1.(int) + e2.(int)
 	}, 0).
@@ -590,7 +600,7 @@ func TestHoldAsStream(t *testing.T) {
 	time.Sleep(50 * time.Millisecond)
 }
 
-func TestHoldCollectAsStream(t *testing.T) {
+func TestHoldCollectAsO(t *testing.T) {
 	observable := New()
 	mapped := observable.Map(func(ev Event) Event {
 		return ev.(int) * ev.(int)
