@@ -1,4 +1,4 @@
-package stream
+package observable
 
 import (
 	"fmt"
@@ -10,7 +10,7 @@ import (
 func TestClose(t *testing.T) {
 	//t.Parallel()
 
-	//Close() Observable
+	//Close() O
 	observable := New()
 	mapped := observable.Map(func(ev Event) Event {
 		return ev //do nothing
@@ -36,8 +36,8 @@ func TestClose(t *testing.T) {
 func TestSubscribers(t *testing.T) {
 	//t.Parallel()
 	//GIVEN
-	parent := newObservable()
-	child := newObservable()
+	parent := newO()
+	child := newO()
 
 	//WHEN
 	parent.subscribe(child)
@@ -100,7 +100,7 @@ func TestFlatMap(t *testing.T) {
 	mapped := observable.Map(func(ev Event) Event {
 		return ev.(int) * ev.(int)
 	})
-	flatmapped := mapped.FlatMap(func(ev Event) *Observable {
+	flatmapped := mapped.FlatMap(func(ev Event) *O {
 		observable = New().
 			Map(func(ev Event) Event {
 			return ev.(int) + 1
@@ -580,13 +580,13 @@ func TestReduceWithStruct(t *testing.T) {
 	}
 }
 
-func TestHoldAsObservable(t *testing.T) {
+func TestHoldAsO(t *testing.T) {
 	New().
 		Map(func(ev Event) Event {
 		return ev.(int) * ev.(int)
 	}).
 		Hold(0).
-		Observable().
+		O().
 		Reduce(func(e1, e2 Event) Event {
 		return e1.(int) + e2.(int)
 	}, 0).
@@ -600,7 +600,7 @@ func TestHoldAsObservable(t *testing.T) {
 	time.Sleep(50 * time.Millisecond)
 }
 
-func TestHoldCollectAsObservable(t *testing.T) {
+func TestHoldCollectAsO(t *testing.T) {
 	observable := New()
 	mapped := observable.Map(func(ev Event) Event {
 		return ev.(int) * ev.(int)

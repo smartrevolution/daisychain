@@ -1,7 +1,7 @@
-package stream_test
+package observable_test
 
 import (
-	"github.com/smartrevolution/daisychain/stream"
+	"github.com/smartrevolution/daisychain/observable"
 
 	"fmt"
 	"time"
@@ -9,18 +9,18 @@ import (
 
 func Example() {
 	//GIVEN
-	s0 := stream.New()
+	s0 := observable.New()
 	defer s0.Close()
 
-	s1 := s0.Map(func(ev stream.Event) stream.Event {
+	s1 := s0.Map(func(ev observable.Event) observable.Event {
 		return ev.(int) * 2
 	})
 
-	s2 := s1.Reduce(func(left, right stream.Event) stream.Event {
+	s2 := s1.Reduce(func(left, right observable.Event) observable.Event {
 		return left.(int) + right.(int)
 	}, 0)
 
-	s3 := s2.Filter(func(ev stream.Event) bool {
+	s3 := s2.Filter(func(ev observable.Event) bool {
 		return ev.(int) > 50
 	})
 
@@ -28,23 +28,23 @@ func Example() {
 	n1 := s1.Hold(0)
 	n2 := s2.Hold(0)
 	n3 := s3.Hold(0)
-	n4 := s3.Collect().Hold(stream.Empty())
+	n4 := s3.Collect().Hold(observable.Empty())
 
-	keyfn := func(ev stream.Event) string {
+	keyfn := func(ev observable.Event) string {
 		if ev.(int)%2 == 0 {
 			return "even"
 		}
 		return "odd"
 	}
 
-	n5 := s1.GroupBy(keyfn).Hold(stream.Empty())
+	n5 := s1.GroupBy(keyfn).Hold(observable.Empty())
 
 	//WHEN
 	s0.From(0, 1, 2, 3, 4, 5, 6, 7, 8, 9)
 	time.Sleep(100 * time.Millisecond)
 
 	//THEN
-	fmt.Println(n0.Value()) //stream = 0..9
+	fmt.Println(n0.Value()) //observable = 0..9
 	fmt.Println(n1.Value()) //map = 9 * 2 = 18
 	fmt.Println(n2.Value()) //reduce = sum(0..9)
 	fmt.Println(n3.Value()) //filter = max(sum(0..9)), when > 50
