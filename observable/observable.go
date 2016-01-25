@@ -505,7 +505,7 @@ func newSignal() *Signal {
 	}
 }
 
-func (s *Signal) O() *O {
+func (s *Signal) Observable() *O {
 	s.RLock()
 	defer s.RUnlock()
 	return s.parent
