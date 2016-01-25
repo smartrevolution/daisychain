@@ -9,22 +9,22 @@ import (
 
 type Event interface{}
 
-type subscribers map[*Stream]interface{}
+type subscribers map[*Observable]interface{}
 
-func (s *Stream) subscribe(child *Stream) {
+func (s *Observable) subscribe(child *Observable) {
 	s.Lock()
 	defer s.Unlock()
 	child.root = s.root
 	s.subs[child] = struct{}{}
 }
 
-func (s *Stream) unsubscribe(child *Stream) {
+func (s *Observable) unsubscribe(child *Observable) {
 	s.Lock()
 	defer s.Unlock()
 	delete(s.subs, child)
 }
 
-func (s *Stream) publish(ev Event) {
+func (s *Observable) publish(ev Event) {
 	s.RLock()
 	defer s.RUnlock()
 	for child, _ := range s.subs {
@@ -64,23 +64,23 @@ func Error(msg string) Event {
 }
 
 // Observable
-type Stream struct {
+type Observable struct {
 	sync.RWMutex
 	in   chan Event
 	subs subscribers
-	root *Stream
+	root *Observable
 }
 
 // Close stops all running computations and cleans up.
 // If you don't call this, bad things will happen,
 // because of all the go routines that keep on running...
-func (s *Stream) Close() {
+func (s *Observable) Close() {
 	s.root.close()
 }
 
-// newStream is a constructor for streams.
-func newStream() *Stream {
-	return &Stream{
+// newObservable is a constructor for streams.
+func newObservable() *Observable {
+	return &Observable{
 		in:   make(chan Event),
 		subs: make(subscribers),
 	}
@@ -93,8 +93,8 @@ func newStream() *Stream {
 // }
 
 // New generates a new Observable.
-func New() *Stream {
-	s := newStream()
+func New() *Observable {
+	s := newObservable()
 	s.root = s
 	//runtime.SetFinalizer(s, sinkFinalizer)
 	go func() {
@@ -108,32 +108,32 @@ func New() *Stream {
 }
 
 // Send sends an Event down the stream
-func (s *Stream) Send(ev Event) {
+func (s *Observable) Send(ev Event) {
 	s.root.in <- ev
 }
 
 // Complete sends a CompleteEvent down the stream
-func (s *Stream) Complete() {
+func (s *Observable) Complete() {
 	s.in <- Complete()
 }
 
 // Error sends an ErrorEvent down the stream
-func (s *Stream) Error(msg string) {
+func (s *Observable) Error(msg string) {
 	s.in <- Error(msg)
 }
 
 // Empty sends an EmptyEvent down the stream
-func (s *Stream) Empty() {
+func (s *Observable) Empty() {
 	s.in <- Empty()
 }
 
 // send sends an Event down the stream.
-func (s *Stream) send(ev Event) {
+func (s *Observable) send(ev Event) {
 	s.in <- ev
 }
 
 // close will unsubscribe all children recursively.
-func (s *Stream) close() {
+func (s *Observable) close() {
 	for child := range s.subs {
 		s.unsubscribe(child)
 		child.close()
@@ -141,19 +141,19 @@ func (s *Stream) close() {
 	}
 }
 
-type FeederFunc func(s *Stream)
+type FeederFunc func(s *Observable)
 
 // Connect starts FeederFunc as a go routine.
 // Use Send(), Empty(), Error(), Complete() inside
 // your FeederFunc to send events async down the stream.
-func (s *Stream) Connect(feeder FeederFunc) *Stream {
+func (s *Observable) Connect(feeder FeederFunc) *Observable {
 	go feeder(s.root)
 	return s
 }
 
 // From sends evts down the stream and blocks until
 // all events are sent.
-func (s *Stream) From(evts ...Event) {
+func (s *Observable) From(evts ...Event) {
 	for _, ev := range evts {
 		s.root.Send(ev)
 	}
@@ -161,7 +161,7 @@ func (s *Stream) From(evts ...Event) {
 
 // Just sends evts down the stream and blocks until
 // all events are sent, then it sends a final CompleteEvent.
-func (s *Stream) Just(evts ...Event) {
+func (s *Observable) Just(evts ...Event) {
 	s.From(evts...)
 	s.root.Complete()
 }
@@ -176,8 +176,8 @@ func isCompleteEvent(ev Event) bool {
 type MapFunc func(Event) Event
 
 // Map returns an Observable that applies MapFunc to each event emitted by the source Observable and emits the results of these function applications.
-func (s *Stream) Map(mapfn MapFunc) *Stream {
-	res := newStream()
+func (s *Observable) Map(mapfn MapFunc) *Observable {
+	res := newObservable()
 	s.subscribe(res)
 
 	go func() {
@@ -198,29 +198,29 @@ func (s *Stream) Map(mapfn MapFunc) *Stream {
 }
 
 // FlatMapFunc is the function signature used by FlatMap.
-type FlatMapFunc func(ev Event) *Stream
+type FlatMapFunc func(ev Event) *Observable
 
 // FlatMap returns an Observable that emits events based on applying FlatMapFunc to each event emitted by the source Observable, where that function returns an Observable, and then emitting the results of this Observable.
-func (s *Stream) FlatMap(flatmapfn FlatMapFunc) *Stream {
-	res := newStream()
+func (s *Observable) FlatMap(flatmapfn FlatMapFunc) *Observable {
+	res := newObservable()
 	s.subscribe(res)
 
 	go func() {
 		for ev := range res.in {
 			if ev != nil {
 				o := flatmapfn(ev)
-				onValue := func(o *Stream) func(ev Event) {
+				onValue := func(o *Observable) func(ev Event) {
 					return func(ev Event) {
 						res.publish(ev)
 					}
 				}
-				onError := func(o *Stream) func(ev Event) {
+				onError := func(o *Observable) func(ev Event) {
 					return func(ev Event) {
 						res.publish(ev)
 						o.Close()
 					}
 				}
-				onComplete := func(o *Stream) func(ev Event) {
+				onComplete := func(o *Observable) func(ev Event) {
 					return func(ev Event) {
 						res.publish(ev)
 						o.Close()
@@ -240,8 +240,8 @@ func (s *Stream) FlatMap(flatmapfn FlatMapFunc) *Stream {
 type ReduceFunc func(left, right Event) Event
 
 // Reduce returns an Observable that applies ReduceFunc to the init Event and first event emitted by a source Observable, then feeds the result of that function along with the second event emitted by the source Observable into the same function, and emits each result.
-func (s *Stream) Reduce(reducefn ReduceFunc, init Event) *Stream {
-	res := newStream()
+func (s *Observable) Reduce(reducefn ReduceFunc, init Event) *Observable {
+	res := newObservable()
 	s.subscribe(res)
 
 	go func() {
@@ -266,8 +266,8 @@ func (s *Stream) Reduce(reducefn ReduceFunc, init Event) *Stream {
 type FilterFunc func(Event) bool
 
 // Filter returns events emitted by an Observable by only emitting those that satisfy the specified predicate FilterFunc.
-func (s *Stream) Filter(filterfn FilterFunc) *Stream {
-	res := newStream()
+func (s *Observable) Filter(filterfn FilterFunc) *Observable {
+	res := newObservable()
 	s.subscribe(res)
 
 	go func() {
@@ -285,8 +285,8 @@ func (s *Stream) Filter(filterfn FilterFunc) *Stream {
 type LookupFunc func(ev Event, signal *Signal) Event
 
 // Lookup
-func (s *Stream) Lookup(lookupfn LookupFunc, signal *Signal) *Stream {
-	res := newStream()
+func (s *Observable) Lookup(lookupfn LookupFunc, signal *Signal) *Observable {
+	res := newObservable()
 	s.subscribe(res)
 
 	go func() {
@@ -309,8 +309,8 @@ func (s *Stream) Lookup(lookupfn LookupFunc, signal *Signal) *Stream {
 // Merge merges two source observables into one observable.
 // Merge emits an event each time either of
 // the source observables emits an event.
-func (s *Stream) Merge(other *Stream) *Stream {
-	res := newStream()
+func (s *Observable) Merge(other *Observable) *Observable {
+	res := newObservable()
 	s.subscribe(res)
 	other.subscribe(res)
 
@@ -329,8 +329,8 @@ func (s *Stream) Merge(other *Stream) *Stream {
 // Throttle buffers events and returns them every d time durations.
 // The emitted event is []Event.
 // The result can be empty, when no events were received in the last interval.
-func (s *Stream) Throttle(d time.Duration) *Stream {
-	res := newStream()
+func (s *Observable) Throttle(d time.Duration) *Observable {
+	res := newObservable()
 	s.subscribe(res)
 
 	go func() {
@@ -356,8 +356,8 @@ func (s *Stream) Throttle(d time.Duration) *Stream {
 }
 
 // Subscribe subscribes to an Observable and provides callbacks to handle the events it emits and any error or completion event it issues.
-func (s *Stream) Subscribe(onValue, onError, onComplete CallbackFunc) *Stream {
-	res := newStream()
+func (s *Observable) Subscribe(onValue, onError, onComplete CallbackFunc) *Observable {
+	res := newObservable()
 	s.subscribe(res)
 
 	go func() {
@@ -387,8 +387,8 @@ func (s *Stream) Subscribe(onValue, onError, onComplete CallbackFunc) *Stream {
 }
 
 // Collect
-func (s *Stream) Collect() *Stream {
-	res := newStream()
+func (s *Observable) Collect() *Observable {
+	res := newObservable()
 	s.subscribe(res)
 
 	go func() {
@@ -421,8 +421,8 @@ func (s *Stream) Collect() *Stream {
 type KeyFunc func(ev Event) string
 
 // GroupBy
-func (s *Stream) GroupBy(keyfn KeyFunc) *Stream {
-	res := newStream()
+func (s *Observable) GroupBy(keyfn KeyFunc) *Observable {
+	res := newObservable()
 	s.subscribe(res)
 
 	go func() {
@@ -452,8 +452,8 @@ func (s *Stream) GroupBy(keyfn KeyFunc) *Stream {
 	return res
 }
 
-func (s *Stream) Distinct(keyfn KeyFunc) *Stream {
-	res := newStream()
+func (s *Observable) Distinct(keyfn KeyFunc) *Observable {
+	res := newObservable()
 	s.subscribe(res)
 
 	go func() {
@@ -486,7 +486,7 @@ func (s *Stream) Distinct(keyfn KeyFunc) *Stream {
 // Signal is a value that changes over time.
 type Signal struct {
 	sync.RWMutex
-	parent      *Stream
+	parent      *Observable
 	event       Event
 	initVal     Event
 	initialized bool
@@ -497,7 +497,7 @@ type Signal struct {
 
 func newSignal() *Signal {
 	return &Signal{
-		parent:      newStream(),
+		parent:      newObservable(),
 		initialized: true,
 		values:      make(observers),
 		errors:      make(observers),
@@ -505,7 +505,7 @@ func newSignal() *Signal {
 	}
 }
 
-func (s *Signal) Stream() *Stream {
+func (s *Signal) Observable() *Observable {
 	s.RLock()
 	defer s.RUnlock()
 	return s.parent
@@ -517,7 +517,7 @@ func (s *Signal) Close() {
 
 // Hold generates a Signal from a stream.
 // The signal always holds the last event from the stream.
-func (s *Stream) Hold(initVal Event) *Signal {
+func (s *Observable) Hold(initVal Event) *Signal {
 	res := newSignal()
 	res.initVal = initVal
 	res.event = res.initVal
@@ -552,32 +552,6 @@ func (s *Stream) Hold(initVal Event) *Signal {
 	}()
 	return res
 }
-
-// GroupBy is deprecated
-// func (s *Stream) GroupBy(keyfn KeyFunc) *Signal {
-// 	res := newSignal()
-// 	res.initVal = make(map[string][]Event)
-// 	res.event = res.initVal
-
-// 	s.subscribe(res.parent)
-
-// 	go func() {
-// 		for ev := range res.parent.in {
-// 			switch ev.(type) {
-// 			case ErrorEvent:
-// 				res.RLock()
-// 				res.parent.publish(ev)
-// 				res.errors.publish(ev)
-// 				res.RUnlock()
-// 			case CompleteEvent:
-// 				res.RLock()
-// 				res.parent.publish(ev)
-// 				res.completed.publish(res.event)
-// 				res.RUnlock()
-// 			default:
-// 				key := keyfn(ev)
-// 				res.Lock()
-// 				res.initialized = true
 
 type Subscription *CallbackFunc
 type observers map[Subscription]CallbackFunc

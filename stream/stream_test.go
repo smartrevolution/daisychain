@@ -36,8 +36,8 @@ func TestClose(t *testing.T) {
 func TestSubscribers(t *testing.T) {
 	//t.Parallel()
 	//GIVEN
-	parent := newStream()
-	child := newStream()
+	parent := newObservable()
+	child := newObservable()
 
 	//WHEN
 	parent.subscribe(child)
@@ -100,7 +100,7 @@ func TestFlatMap(t *testing.T) {
 	mapped := observable.Map(func(ev Event) Event {
 		return ev.(int) * ev.(int)
 	})
-	flatmapped := mapped.FlatMap(func(ev Event) *Stream {
+	flatmapped := mapped.FlatMap(func(ev Event) *Observable {
 		observable = New().
 			Map(func(ev Event) Event {
 			return ev.(int) + 1
@@ -580,13 +580,13 @@ func TestReduceWithStruct(t *testing.T) {
 	}
 }
 
-func TestHoldAsStream(t *testing.T) {
+func TestHoldAsObservable(t *testing.T) {
 	New().
 		Map(func(ev Event) Event {
 		return ev.(int) * ev.(int)
 	}).
 		Hold(0).
-		Stream().
+		Observable().
 		Reduce(func(e1, e2 Event) Event {
 		return e1.(int) + e2.(int)
 	}, 0).
@@ -600,7 +600,7 @@ func TestHoldAsStream(t *testing.T) {
 	time.Sleep(50 * time.Millisecond)
 }
 
-func TestHoldCollectAsStream(t *testing.T) {
+func TestHoldCollectAsObservable(t *testing.T) {
 	observable := New()
 	mapped := observable.Map(func(ev Event) Event {
 		return ev.(int) * ev.(int)
