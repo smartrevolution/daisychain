@@ -100,15 +100,15 @@ func TestFlatMap(t *testing.T) {
 	mapped := observable.Map(func(ev Event) Event {
 		return ev.(int) * ev.(int)
 	})
-	flatmapped := mapped.FlatMap(func(ev Event) *Observable {
-		observable = New()
-		addOne := observable.Map(func(ev Event) Event {
+	flatmapped := mapped.FlatMap(func(ev Event) *Stream {
+		observable = New().
+			Map(func(ev Event) Event {
 			return ev.(int) + 1
 		})
 		return observable
 	})
 	flatmapped.Subscribe(nil, nil, func(ev Event) {
-		if v, ok := ev.(int); v != 2 && v != 5 && v != 10 {
+		if v, ok := ev.(int); !ok && v != 2 && v != 5 && v != 10 {
 			t.Error("Expected 2, 5 or 10: Got:", v)
 		}
 	}).Just(1, 2, 3)
