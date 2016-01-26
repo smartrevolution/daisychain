@@ -2,7 +2,7 @@ package observable
 
 import (
 	"log"
-	//	"runtime"
+	"runtime"
 	"sync"
 	"time"
 )
@@ -87,16 +87,16 @@ func newO() *O {
 }
 
 // If the runtime discards a O, all depending streams are discarded , too.
-// func sinkFinalizer(s *O) {
-// 	log.Println("DEBUG: Called Finalizer")
-// 	s.close()
-// }
+func sinkFinalizer(s *O) {
+	log.Println("DEBUG: Called Finalizer")
+	s.close()
+}
 
-// New generates a new O.
+// New generates a new Observable.
 func New() *O {
 	s := newO()
 	s.root = s
-	//runtime.SetFinalizer(s, sinkFinalizer)
+	runtime.SetFinalizer(s, sinkFinalizer)
 	go func() {
 		for ev := range s.in {
 			s.publish(ev)
@@ -134,6 +134,12 @@ func (s *O) send(ev Event) {
 
 // close will unsubscribe all children recursively.
 func (s *O) close() {
+	defer func() {
+		if r := recover(); r != nil {
+			log.Println(r)
+		}
+	}()
+
 	for child := range s.subs {
 		s.unsubscribe(child)
 		child.close()
@@ -180,6 +186,13 @@ func (s *O) Map(mapfn MapFunc) *O {
 	res := newO()
 	s.subscribe(res)
 
+	defer func() {
+		if r := recover(); r != nil {
+			res.publish(Error(r.(string)))
+			res.publish(Complete())
+		}
+	}()
+
 	go func() {
 		for ev := range res.in {
 			if ev != nil {
@@ -204,6 +217,13 @@ type FlatMapFunc func(ev Event) *O
 func (s *O) FlatMap(flatmapfn FlatMapFunc) *O {
 	res := newO()
 	s.subscribe(res)
+
+	defer func() {
+		if r := recover(); r != nil {
+			res.publish(Error(r.(string)))
+			res.publish(Complete())
+		}
+	}()
 
 	go func() {
 		for ev := range res.in {
@@ -244,6 +264,13 @@ func (s *O) Reduce(reducefn ReduceFunc, init Event) *O {
 	res := newO()
 	s.subscribe(res)
 
+	defer func() {
+		if r := recover(); r != nil {
+			res.publish(Error(r.(string)))
+			res.publish(Complete())
+		}
+	}()
+
 	go func() {
 		val := init
 		for ev := range res.in {
@@ -270,6 +297,13 @@ func (s *O) Filter(filterfn FilterFunc) *O {
 	res := newO()
 	s.subscribe(res)
 
+	defer func() {
+		if r := recover(); r != nil {
+			res.publish(Error(r.(string)))
+			res.publish(Complete())
+		}
+	}()
+
 	go func() {
 		for ev := range res.in {
 			if (ev != nil && filterfn(ev)) || isCompleteEvent(ev) {
@@ -288,6 +322,13 @@ type LookupFunc func(ev Event, signal *Signal) Event
 func (s *O) Lookup(lookupfn LookupFunc, signal *Signal) *O {
 	res := newO()
 	s.subscribe(res)
+
+	defer func() {
+		if r := recover(); r != nil {
+			res.publish(Error(r.(string)))
+			res.publish(Complete())
+		}
+	}()
 
 	go func() {
 		for ev := range res.in {
@@ -314,6 +355,13 @@ func (s *O) Merge(other *O) *O {
 	s.subscribe(res)
 	other.subscribe(res)
 
+	defer func() {
+		if r := recover(); r != nil {
+			res.publish(Error(r.(string)))
+			res.publish(Complete())
+		}
+	}()
+
 	go func() {
 		for ev := range res.in {
 			if ev != nil {
@@ -332,6 +380,13 @@ func (s *O) Merge(other *O) *O {
 func (s *O) Throttle(d time.Duration) *O {
 	res := newO()
 	s.subscribe(res)
+
+	defer func() {
+		if r := recover(); r != nil {
+			res.publish(Error(r.(string)))
+			res.publish(Complete())
+		}
+	}()
 
 	go func() {
 		ticker := time.NewTicker(d)
@@ -359,6 +414,13 @@ func (s *O) Throttle(d time.Duration) *O {
 func (s *O) Subscribe(onValue, onError, onComplete CallbackFunc) *O {
 	res := newO()
 	s.subscribe(res)
+
+	defer func() {
+		if r := recover(); r != nil {
+			res.publish(Error(r.(string)))
+			res.publish(Complete())
+		}
+	}()
 
 	go func() {
 		lastValue := Empty()
@@ -390,6 +452,13 @@ func (s *O) Subscribe(onValue, onError, onComplete CallbackFunc) *O {
 func (s *O) Collect() *O {
 	res := newO()
 	s.subscribe(res)
+
+	defer func() {
+		if r := recover(); r != nil {
+			res.publish(Error(r.(string)))
+			res.publish(Complete())
+		}
+	}()
 
 	go func() {
 		var event []Event
@@ -425,6 +494,13 @@ func (s *O) GroupBy(keyfn KeyFunc) *O {
 	res := newO()
 	s.subscribe(res)
 
+	defer func() {
+		if r := recover(); r != nil {
+			res.publish(Error(r.(string)))
+			res.publish(Complete())
+		}
+	}()
+
 	go func() {
 		event := make(map[string][]Event)
 		for ev := range res.in {
@@ -456,6 +532,13 @@ func (s *O) Distinct(keyfn KeyFunc) *O {
 	res := newO()
 	s.subscribe(res)
 
+	defer func() {
+		if r := recover(); r != nil {
+			res.publish(Error(r.(string)))
+			res.publish(Complete())
+		}
+	}()
+
 	go func() {
 		event := make(map[string]Event)
 		for ev := range res.in {
@@ -486,22 +569,23 @@ func (s *O) Distinct(keyfn KeyFunc) *O {
 // Signal is a value that changes over time.
 type Signal struct {
 	sync.RWMutex
-	parent      *O
-	event       Event
-	initVal     Event
-	initialized bool
-	values      observers
-	errors      observers
-	completed   observers
+	parent        *O
+	event         Event
+	initVal       Event
+	isInitialized bool
+	isCompleted   bool
+	lastError     Event
+	values        observers
+	errors        observers
+	completed     observers
 }
 
 func newSignal() *Signal {
 	return &Signal{
-		parent:      newO(),
-		initialized: true,
-		values:      make(observers),
-		errors:      make(observers),
-		completed:   make(observers),
+		parent:    newO(),
+		values:    make(observers),
+		errors:    make(observers),
+		completed: make(observers),
 	}
 }
 
@@ -528,20 +612,29 @@ func (s *O) Hold(initVal Event) *Signal {
 		for ev := range res.parent.in {
 			switch ev.(type) {
 			case ErrorEvent:
+				res.Lock()
+				res.lastError = ev
+				res.Unlock()
+
 				res.RLock()
 				res.parent.publish(ev)
 				res.errors.publish(ev)
 				res.RUnlock()
 			case CompleteEvent:
+				res.Lock()
+				res.isCompleted = true
+				res.Unlock()
+
 				res.RLock()
 				res.parent.publish(ev)
 				res.completed.publish(res.event)
 				res.RUnlock()
 			default:
 				res.Lock()
-				res.initialized = true
+				res.isInitialized = true
 				res.event = ev
 				res.Unlock()
+
 				res.RLock()
 				res.parent.publish(res.event)
 				res.values.publish(res.event)
@@ -576,7 +669,9 @@ func (o *observers) publish(ev Event) {
 func (s *Signal) Reset() {
 	s.Lock()
 	defer s.Unlock()
-	s.initialized = false
+	s.isInitialized = false
+	s.lastError = nil
+	s.isCompleted = false
 	s.event = s.initVal
 }
 
@@ -584,7 +679,7 @@ func (s *Signal) Reset() {
 func (s *Signal) Value() Event {
 	s.RLock()
 	defer s.RUnlock()
-	if s.initialized {
+	if s.isInitialized {
 		return s.event
 	}
 	return s.initVal
@@ -602,19 +697,39 @@ func (s *Signal) OnValue(callbackfn CallbackFunc) Subscription {
 }
 
 // OnError registers callback functions that are called each time
-// the Signal receives an error event.
+// the Signal receives an error event. If an ErrorEvent
+// was received before the subscription, the CallbackFunc will
+// be called immediately.
 func (s *Signal) OnError(callbackfn CallbackFunc) Subscription {
 	s.Lock()
-	defer s.Unlock()
-	return s.errors.subscribe(callbackfn)
+	subs := s.errors.subscribe(callbackfn)
+	s.Unlock()
+
+	s.RLock()
+	if err := s.lastError; err != nil {
+		callbackfn(err)
+	}
+	s.RUnlock()
+
+	return subs
 }
 
 // OnComplete registers callback functions that are called
-// when there are no more values to expect.
+// when there are no more values to expect. If a CompleteEvent
+// was received before the subscription, the CallbackFunc will
+// be called immediately.
 func (s *Signal) OnComplete(callbackfn CallbackFunc) Subscription {
 	s.Lock()
-	defer s.Unlock()
-	return s.completed.subscribe(callbackfn)
+	subs := s.completed.subscribe(callbackfn)
+	s.Unlock()
+
+	s.RLock()
+	if s.isCompleted {
+		callbackfn(s.event)
+	}
+	s.RUnlock()
+
+	return subs
 }
 
 // Unsubscribe does its work to unsubscribe callback functions
