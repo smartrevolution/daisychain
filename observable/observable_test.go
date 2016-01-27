@@ -640,3 +640,60 @@ func TestNoSignal(t *testing.T) {
 
 	time.Sleep(50 * time.Millisecond)
 }
+
+func TestConnect(t *testing.T) {
+	o := Create(func(o *O) {
+		o.Just(1, 2, 3, 4, 5)
+	})
+
+	mapped := o.Map(func(ev Event) Event {
+		return ev.(int) * ev.(int)
+	})
+
+	var wg sync.WaitGroup
+
+	mapped.Subscribe(nil, nil, func(ev Event) {
+		if val, _ := ev.(int); val != 25 {
+			t.Error("Expected 25, Got:", val)
+		}
+		wg.Done()
+	})
+
+	wg.Add(1)
+	mapped.Connect()
+	wg.Wait()
+	wg.Add(1)
+	mapped.Connect()
+	wg.Wait()
+}
+
+// func TestCacheReplay(t *testing.T) {
+// 	o := Create(func(o *O) {
+// 		o.Just(1, 2, 3, 4, 5)
+// 	})
+
+// 	mapped := o.Map(func(ev Event) Event {
+// 		return ev.(int) * ev.(int)
+// 	})
+
+// 	cached := mapped.Cache()
+
+// 	var wg sync.WaitGroup
+
+// 	cached.Subscribe(nil, nil, func(ev Event) {
+// 		if val, _ := ev.(int); val != 25 {
+// 			t.Error("Expected 25, Got:", val)
+// 		}
+// 		wg.Done()
+// 	})
+
+// 	wg.Add(1)
+// 	mapped.Connect()
+// 	wg.Wait()
+// 	wg.Add(1)
+// 	mapped.Replay()
+// 	wg.Wait()
+// 	// wg.Add(1)
+// 	// mapped.Refresh()
+// 	// wg.Wait()
+// }

@@ -66,9 +66,11 @@ func Error(msg string) Event {
 // O
 type O struct {
 	sync.RWMutex
-	in   chan Event
-	subs subscribers
-	root *O
+	in     chan Event
+	subs   subscribers
+	root   *O
+	feeder FeederFunc
+	//	cache  []Event
 }
 
 // Close stops all running computations and cleans up.
@@ -105,6 +107,19 @@ func New() *O {
 	}()
 
 	return s
+}
+
+type FeederFunc func(s *O)
+
+// Connect starts FeederFunc as a go routine.
+// Use Send(), Empty(), Error(), Complete() inside
+// your FeederFunc to send events async down the stream.
+func Create(feederfn FeederFunc) *O {
+	o := New()
+	o.Lock()
+	o.feeder = feederfn
+	o.Unlock()
+	return o
 }
 
 // Send sends an Event down the stream
@@ -147,15 +162,69 @@ func (s *O) close() {
 	}
 }
 
-type FeederFunc func(s *O)
-
-// Connect starts FeederFunc as a go routine.
-// Use Send(), Empty(), Error(), Complete() inside
-// your FeederFunc to send events async down the stream.
-func (s *O) Connect(feeder FeederFunc) *O {
-	go feeder(s.root)
-	return s
+// Run starts FeederFunc set with Create() as a go routine.
+func (o *O) Connect() *O {
+	o.RLock()
+	defer o.RUnlock()
+	if feeder := o.root.feeder; feeder != nil {
+		go feeder(o.root)
+	} else {
+		o.root.Send(Error("No FeederFunc set with Create(). Connect() did nothing."))
+	}
+	return o
 }
+
+func Log(ev Event) {
+	log.Printf("&#v", ev)
+}
+
+//TODO(SR): Make Cache(), Replay(), Refresh() work!
+
+// func (s *O) Cache() *O {
+// 	res := newO()
+// 	s.subscribe(res)
+
+// 	defer func() {
+// 		if r := recover(); r != nil {
+// 			res.publish(Error(r.(string)))
+// 			res.publish(Complete())
+// 		}
+// 	}()
+
+// 	go func() {
+// 		for ev := range res.in {
+// 			if ev != nil {
+// 				if !isCompleteEvent(ev) {
+// 					s.root.Lock()
+// 					(*s).root.cache = append((*s).root.cache, ev)
+// 					log.Println("--->>>", s.root)
+// 					s.root.Unlock()
+// 					res.publish(ev)
+// 				} else {
+// 					res.publish(ev)
+// 				}
+// 			}
+// 		}
+// 		log.Println("DEBUG: Closing Cache()")
+// 	}()
+
+// 	return res
+
+// }
+
+// func (s *O) Replay() {
+// 	s.RLock()
+// 	cache := s.root.cache
+// 	s.RUnlock()
+// 	s.root.Just(cache...)
+// }
+
+// func (s *O) Refresh() {
+// 	s.Lock()
+// 	s.root.cache = []Event{}
+// 	s.Unlock()
+// 	s.Connect()
+// }
 
 // From sends evts down the stream and blocks until
 // all events are sent.
@@ -428,15 +497,15 @@ func (s *O) Subscribe(onValue, onError, onComplete CallbackFunc) *O {
 			switch ev.(type) {
 			case ErrorEvent:
 				if onError != nil {
-					go onError(ev)
+					onError(ev)
 				}
 			case CompleteEvent:
 				if onComplete != nil {
-					go onComplete(lastValue)
+					onComplete(lastValue) //TODO(SR): Call async? Go routine?
 				}
 			default:
 				if onValue != nil {
-					go onValue(ev)
+					onValue(ev)
 				}
 				lastValue = ev
 			}
