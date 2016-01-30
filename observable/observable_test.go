@@ -73,6 +73,66 @@ func TestNew(t *testing.T) {
 	}
 }
 
+func testgen(t *testing.T, wg *sync.WaitGroup) *O {
+	o := New()
+	o.Subscribe(nil, nil, func(ev Event) {
+		if val, ok := ev.(int); ok && val != 9 {
+			t.Errorf("Expected: 9, Got: %d", val)
+		} else {
+			t.Errorf("Expected: int, Got: %T (%v)", ev, ev)
+		}
+	})
+	o.Subscribe(nil, nil, func(ev Event) {
+		wg.Done()
+	})
+	return o
+}
+
+var DEBUG = false
+
+func debug(t *testing.T) {
+	if !DEBUG {
+		return
+	}
+	var seq int
+	DEBUG_FLOW = func(prefix string, ev Event) {
+
+		t.Logf("%d -> %s, \t\t%v, \t\t%T", seq, prefix, ev, ev)
+		seq++
+	}
+}
+
+func TestNewSubSend(t *testing.T) {
+	debug(t)
+	var wg sync.WaitGroup
+	o := testgen(t, &wg)
+	wg.Add(1)
+	for i := 0; i < 10; i++ {
+		o.Send(i)
+	}
+	o.Send(Complete())
+	wg.Wait()
+}
+
+func TestNewSubFrom(t *testing.T) {
+	debug(t)
+	var wg sync.WaitGroup
+	o := testgen(t, &wg)
+	wg.Add(1)
+	o.From(0, 1, 2, 3, 4, 5, 6, 7, 8, 9)
+	o.Send(Complete())
+	wg.Wait()
+}
+
+func TestNewSubJust(t *testing.T) {
+	debug(t)
+	var wg sync.WaitGroup
+	o := testgen(t, &wg)
+	wg.Add(1)
+	o.Just(0, 1, 2, 3, 4, 5, 6, 7, 8, 9)
+	wg.Wait()
+}
+
 func TestMap(t *testing.T) {
 	//t.Parallel()
 

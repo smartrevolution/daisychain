@@ -1,11 +1,18 @@
 package observable
 
 import (
-	"log"
 	"runtime"
 	"sync"
 	"time"
 )
+
+var DEBUG_CLEANUP = func(msg string) {
+	//do nothing, will be set while Testing
+}
+
+var DEBUG_FLOW = func(prefix string, ev Event) {
+	//do nothing, will be set while testing
+}
 
 type Event interface{}
 
@@ -88,9 +95,9 @@ func newO() *O {
 	}
 }
 
-// If the runtime discards a O, all depending streams are discarded , too.
+// If the runtime discards a Observables, all depending streams are discarded, too.
 func sinkFinalizer(s *O) {
-	log.Println("DEBUG: Called Finalizer")
+	DEBUG_CLEANUP("DEBUG: Called Finalizer")
 	s.close()
 }
 
@@ -101,9 +108,10 @@ func New() *O {
 	runtime.SetFinalizer(s, sinkFinalizer)
 	go func() {
 		for ev := range s.in {
+			DEBUG_FLOW("New()", ev)
 			s.publish(ev)
 		}
-		log.Println("DEBUG: Closing O")
+		DEBUG_CLEANUP("DEBUG: Closing O")
 	}()
 
 	return s
@@ -151,7 +159,7 @@ func (s *O) send(ev Event) {
 func (s *O) close() {
 	defer func() {
 		if r := recover(); r != nil {
-			log.Println(r)
+			DEBUG_CLEANUP(r.(string))
 		}
 	}()
 
@@ -174,9 +182,9 @@ func (o *O) Connect() *O {
 	return o
 }
 
-func Log(ev Event) {
-	log.Printf("&#v", ev)
-}
+// func Log(ev Event) {
+// 	log.Printf("&#v", ev)
+// }
 
 //TODO(SR): Make Cache(), Replay(), Refresh() work!
 
@@ -205,7 +213,7 @@ func Log(ev Event) {
 // 				}
 // 			}
 // 		}
-// 		log.Println("DEBUG: Closing Cache()")
+// 		DEBUG_CLEANUP("DEBUG: Closing Cache()")
 // 	}()
 
 // 	return res
@@ -230,6 +238,7 @@ func Log(ev Event) {
 // all events are sent.
 func (s *O) From(evts ...Event) {
 	for _, ev := range evts {
+		DEBUG_FLOW("Send()", ev)
 		s.root.Send(ev)
 	}
 }
@@ -237,6 +246,7 @@ func (s *O) From(evts ...Event) {
 // Just sends evts down the stream and blocks until
 // all events are sent, then it sends a final CompleteEvent.
 func (s *O) Just(evts ...Event) {
+	DEBUG_FLOW("FROM()", evts)
 	s.From(evts...)
 	s.root.Complete()
 }
@@ -273,7 +283,7 @@ func (s *O) Map(mapfn MapFunc) *O {
 				}
 			}
 		}
-		log.Println("DEBUG: Closing Map()")
+		DEBUG_CLEANUP("DEBUG: Closing Map()")
 	}()
 
 	return res
@@ -319,7 +329,7 @@ func (s *O) FlatMap(flatmapfn FlatMapFunc) *O {
 				o.Just(ev)
 			}
 		}
-		log.Println("DEBUG: Closing FlatMap()")
+		DEBUG_CLEANUP("DEBUG: Closing FlatMap()")
 	}()
 
 	return res
@@ -352,7 +362,7 @@ func (s *O) Reduce(reducefn ReduceFunc, init Event) *O {
 				}
 			}
 		}
-		log.Println("DEBUG: Closing Reduce()")
+		DEBUG_CLEANUP("DEBUG: Closing Reduce()")
 	}()
 
 	return res
@@ -379,7 +389,7 @@ func (s *O) Filter(filterfn FilterFunc) *O {
 				res.publish(ev)
 			}
 		}
-		log.Println("DEBUG: Closing Filter()")
+		DEBUG_CLEANUP("DEBUG: Closing Filter()")
 	}()
 
 	return res
@@ -410,7 +420,7 @@ func (s *O) Lookup(lookupfn LookupFunc, signal *Signal) *O {
 				}
 			}
 		}
-		log.Println("DEBUG: Closing Lookup()")
+		DEBUG_CLEANUP("DEBUG: Closing Lookup()")
 	}()
 
 	return res
@@ -437,7 +447,7 @@ func (s *O) Merge(other *O) *O {
 				res.publish(ev)
 			}
 		}
-		log.Println("DEBUG: Closing Merge()")
+		DEBUG_CLEANUP("DEBUG: Closing Merge()")
 	}()
 
 	return res
@@ -473,7 +483,7 @@ func (s *O) Throttle(d time.Duration) *O {
 
 			}
 		}
-		log.Println("DEBUG: Closing Trottle()")
+		DEBUG_CLEANUP("DEBUG: Closing Trottle()")
 	}()
 
 	return res
@@ -511,7 +521,7 @@ func (s *O) Subscribe(onValue, onError, onComplete CallbackFunc) *O {
 			}
 			res.publish(ev)
 		}
-		log.Println("DEBUG: Closing Subscribe()")
+		DEBUG_CLEANUP("DEBUG: Closing Subscribe()")
 	}()
 
 	return res
@@ -551,7 +561,7 @@ func (s *O) Collect() *O {
 				res.RUnlock()
 			}
 		}
-		log.Println("DEBUG: Closing Collect()")
+		DEBUG_CLEANUP("DEBUG: Closing Collect()")
 	}()
 	return res
 }
@@ -592,7 +602,7 @@ func (s *O) GroupBy(keyfn KeyFunc) *O {
 				res.RUnlock()
 			}
 		}
-		log.Println("DEBUG: Closing GroupBy()")
+		DEBUG_CLEANUP("DEBUG: Closing GroupBy()")
 	}()
 	return res
 }
@@ -630,7 +640,7 @@ func (s *O) Distinct(keyfn KeyFunc) *O {
 				res.RUnlock()
 			}
 		}
-		log.Println("DEBUG: Closing Distinct()")
+		DEBUG_CLEANUP("DEBUG: Closing Distinct()")
 	}()
 	return res
 }
@@ -710,7 +720,7 @@ func (s *O) Hold(initVal Event) *Signal {
 				res.RUnlock()
 			}
 		}
-		log.Println("DEBUG: Closing Hold()")
+		DEBUG_CLEANUP("DEBUG: Closing Hold()")
 	}()
 	return res
 }
