@@ -73,13 +73,14 @@ func TestNew(t *testing.T) {
 	}
 }
 
-func testgen(t *testing.T, wg *sync.WaitGroup) *O {
+func testNewSub(t *testing.T, wg *sync.WaitGroup) *O {
 	o := New()
 	o.Subscribe(nil, nil, func(ev Event) {
+		DEBUG_FLOW("Subscribe", ev)
 		if val, ok := ev.(int); ok && val != 9 {
 			t.Errorf("Expected: 9, Got: %d", val)
 		} else {
-			t.Errorf("Expected: int, Got: %T (%v)", ev, ev)
+			t.Errorf("Expected: int (9), Got: %T (%v)", ev, ev)
 		}
 	})
 	o.Subscribe(nil, nil, func(ev Event) {
@@ -88,7 +89,31 @@ func testgen(t *testing.T, wg *sync.WaitGroup) *O {
 	return o
 }
 
-var DEBUG = false
+func testNewMapReduceSub(t *testing.T, wg *sync.WaitGroup) *O {
+	o := New()
+	m := o.Map(func(ev Event) Event {
+		return ev.(int) * ev.(int)
+	})
+	r := m.Reduce(func(e1, e2 Event) Event {
+		return e1.(int) + e2.(int)
+	}, 0)
+	r.Subscribe(nil, nil, func(ev Event) {
+		DEBUG_FLOW("Subscribe", ev)
+		if val, ok := ev.(int); ok && val != 9 {
+			t.Errorf("Expected: 9, Got: %d", val)
+		} else {
+			t.Errorf("Expected: int (9), Got: %T (%v)", ev, ev)
+		}
+	})
+	o.Subscribe(nil, nil, func(ev Event) {
+		wg.Done()
+	})
+	return o
+}
+
+var DEBUG = true
+
+//var DEBUG = false
 
 func debug(t *testing.T) {
 	if !DEBUG {
@@ -97,7 +122,7 @@ func debug(t *testing.T) {
 	var seq int
 	DEBUG_FLOW = func(prefix string, ev Event) {
 
-		t.Logf("%d -> %s, \t\t%v, \t\t%T", seq, prefix, ev, ev)
+		t.Logf("%s: %d -> %s, \t\t%v, \t\t%T", time.Now(), seq, prefix, ev, ev)
 		seq++
 	}
 }
@@ -105,7 +130,7 @@ func debug(t *testing.T) {
 func TestNewSubSend(t *testing.T) {
 	debug(t)
 	var wg sync.WaitGroup
-	o := testgen(t, &wg)
+	o := testNewSub(t, &wg)
 	wg.Add(1)
 	for i := 0; i < 10; i++ {
 		o.Send(i)
@@ -117,7 +142,7 @@ func TestNewSubSend(t *testing.T) {
 func TestNewSubFrom(t *testing.T) {
 	debug(t)
 	var wg sync.WaitGroup
-	o := testgen(t, &wg)
+	o := testNewSub(t, &wg)
 	wg.Add(1)
 	o.From(0, 1, 2, 3, 4, 5, 6, 7, 8, 9)
 	o.Send(Complete())
@@ -127,7 +152,16 @@ func TestNewSubFrom(t *testing.T) {
 func TestNewSubJust(t *testing.T) {
 	debug(t)
 	var wg sync.WaitGroup
-	o := testgen(t, &wg)
+	o := testNewSub(t, &wg)
+	wg.Add(1)
+	o.Just(0, 1, 2, 3, 4, 5, 6, 7, 8, 9)
+	wg.Wait()
+}
+
+func TestNewMapReduceSubJust(t *testing.T) {
+	debug(t)
+	var wg sync.WaitGroup
+	o := testNewMapReduceSub(t, &wg)
 	wg.Add(1)
 	o.Just(0, 1, 2, 3, 4, 5, 6, 7, 8, 9)
 	wg.Wait()

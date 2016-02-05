@@ -274,6 +274,7 @@ func (s *O) Map(mapfn MapFunc) *O {
 
 	go func() {
 		for ev := range res.in {
+			DEBUG_FLOW("MAP()", ev)
 			if ev != nil {
 				if !isCompleteEvent(ev) {
 					val := mapfn(ev)
@@ -353,6 +354,7 @@ func (s *O) Reduce(reducefn ReduceFunc, init Event) *O {
 	go func() {
 		val := init
 		for ev := range res.in {
+			DEBUG_FLOW("REDUCE()", ev)
 			if ev != nil {
 				if !isCompleteEvent(ev) {
 					val = reducefn(val, ev)
@@ -489,7 +491,7 @@ func (s *O) Throttle(d time.Duration) *O {
 	return res
 }
 
-// Subscribe subscribes to an O and provides callbacks to handle the events it emits and any error or completion event it issues.
+// Subscribe subscribes to an Observable and provides callbacks to handle the events it emits and any error or completion event it issues.
 func (s *O) Subscribe(onValue, onError, onComplete CallbackFunc) *O {
 	res := newO()
 	s.subscribe(res)
