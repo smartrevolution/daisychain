@@ -1,16 +1,32 @@
 package observable
 
 import (
+	"flag"
 	"fmt"
 	"sync"
 	"testing"
 	"time"
 )
 
-func TestClose(t *testing.T) {
-	//t.Parallel()
+var CHATTY = func() (result bool) {
+	flag.BoolVar(&result, "chatty", false, "For more debug output use -chatty")
+	flag.Parse()
+	return
+}()
 
-	//Close() O
+func debug(t *testing.T) {
+	if !CHATTY {
+		return
+	}
+	var seq int
+	DEBUG_FLOW = func(prefix string, ev Event) {
+
+		t.Logf("%s: %d -> %s, \t\t%v, \t\t%T", time.Now(), seq, prefix, ev, ev)
+		seq++
+	}
+}
+
+func TestClose(t *testing.T) {
 	observable := New()
 	mapped := observable.Map(func(ev Event) Event {
 		return ev //do nothing
@@ -34,7 +50,6 @@ func TestClose(t *testing.T) {
 }
 
 func TestSubscribers(t *testing.T) {
-	//t.Parallel()
 	//GIVEN
 	parent := newO()
 	child := newO()
@@ -57,8 +72,6 @@ func TestSubscribers(t *testing.T) {
 }
 
 func TestNew(t *testing.T) {
-	//t.Parallel()
-
 	//GIVEN
 	observable := New()
 	signal := observable.Hold(0)
@@ -77,9 +90,7 @@ func testNewSub(t *testing.T, wg *sync.WaitGroup) *O {
 	o := New()
 	o.Subscribe(nil, nil, func(ev Event) {
 		DEBUG_FLOW("Subscribe", ev)
-		if val, ok := ev.(int); ok && val != 9 {
-			t.Errorf("Expected: 9, Got: %d", val)
-		} else {
+		if val, ok := ev.(int); !(ok && val == 9) {
 			t.Errorf("Expected: int (9), Got: %T (%v)", ev, ev)
 		}
 	})
@@ -90,6 +101,7 @@ func testNewSub(t *testing.T, wg *sync.WaitGroup) *O {
 }
 
 func testNewMapReduceSub(t *testing.T, wg *sync.WaitGroup) *O {
+	debug(t)
 	o := New()
 	m := o.Map(func(ev Event) Event {
 		return ev.(int) * ev.(int)
@@ -99,9 +111,7 @@ func testNewMapReduceSub(t *testing.T, wg *sync.WaitGroup) *O {
 	}, 0)
 	r.Subscribe(nil, nil, func(ev Event) {
 		DEBUG_FLOW("Subscribe", ev)
-		if val, ok := ev.(int); ok && val != 9 {
-			t.Errorf("Expected: 9, Got: %d", val)
-		} else {
+		if val, ok := ev.(int); !(ok && val == 9) {
 			t.Errorf("Expected: int (9), Got: %T (%v)", ev, ev)
 		}
 	})
@@ -109,22 +119,6 @@ func testNewMapReduceSub(t *testing.T, wg *sync.WaitGroup) *O {
 		wg.Done()
 	})
 	return o
-}
-
-var DEBUG = true
-
-//var DEBUG = false
-
-func debug(t *testing.T) {
-	if !DEBUG {
-		return
-	}
-	var seq int
-	DEBUG_FLOW = func(prefix string, ev Event) {
-
-		t.Logf("%s: %d -> %s, \t\t%v, \t\t%T", time.Now(), seq, prefix, ev, ev)
-		seq++
-	}
 }
 
 func TestNewSubSend(t *testing.T) {
@@ -168,8 +162,6 @@ func TestNewMapReduceSubJust(t *testing.T) {
 }
 
 func TestMap(t *testing.T) {
-	//t.Parallel()
-
 	//GIVEN
 	observable := New()
 
@@ -210,8 +202,6 @@ func TestFlatMap(t *testing.T) {
 }
 
 func TestReduce(t *testing.T) {
-	//t.Parallel()
-
 	//GIVEN
 	observable := New()
 
@@ -232,8 +222,6 @@ func TestReduce(t *testing.T) {
 }
 
 func TestFilter(t *testing.T) {
-	//t.Parallel()
-
 	//GIVEN
 	observable := New()
 
@@ -254,8 +242,6 @@ func TestFilter(t *testing.T) {
 }
 
 func TestCompleteBehavior(t *testing.T) {
-	//t.Parallel()
-
 	//GIVEN
 	s0 := New()
 
@@ -308,8 +294,6 @@ func TestCompleteBehavior(t *testing.T) {
 }
 
 func TestThrottle(t *testing.T) {
-	//t.Parallel()
-
 	//GIVEN
 	observable := New()
 	mapped := observable.Map(func(ev Event) Event {
@@ -334,8 +318,6 @@ func TestThrottle(t *testing.T) {
 }
 
 func TestMerge(t *testing.T) {
-	//t.Parallel()
-
 	//GIVEN
 	s0 := New()
 	s1 := New()
@@ -378,8 +360,6 @@ func TestMerge(t *testing.T) {
 }
 
 func TestCollect(t *testing.T) {
-	//t.Parallel()
-
 	//GIVEN
 	observable := New()
 	collected := observable.Collect()
@@ -397,8 +377,6 @@ func TestCollect(t *testing.T) {
 }
 
 func TestGroupBy(t *testing.T) {
-	//t.Parallel()
-
 	//GIVEN
 	observable := New()
 	grouped := observable.GroupBy(func(ev Event) string {
@@ -421,8 +399,6 @@ func TestGroupBy(t *testing.T) {
 }
 
 func TestDistinct(t *testing.T) {
-	//	//t.Parallel()
-
 	New().
 		Distinct(func(ev Event) string {
 		if ev.(int)%2 == 0 {
@@ -441,7 +417,6 @@ func TestDistinct(t *testing.T) {
 }
 
 func xTestSignalOnChange(t *testing.T) {
-	//t.Parallel()
 	var wg sync.WaitGroup
 
 	//GIVEN
@@ -542,8 +517,6 @@ func xTestSignalOnChange(t *testing.T) {
 }
 
 func TestReset(t *testing.T) {
-	//t.Parallel()
-
 	var wg sync.WaitGroup
 	wg.Add(2)
 
