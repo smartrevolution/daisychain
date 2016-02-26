@@ -89,6 +89,7 @@ func Map(mapfn MapFunc) Operator {
 		return ObservableFunc(func(obs Observer) {
 			input := make(chan Event)
 			go func() {
+				DEBUG_CLEANUP("Starting Map()")
 				for ev := range input {
 					if IsCompleteEvent(ev) || IsErrorEvent(ev) {
 						DEBUG_FLOW("Map:", ev)
@@ -119,6 +120,7 @@ func Reduce(reducefn ReduceFunc, init Event) Operator {
 			input := make(chan Event)
 			go func() {
 				next := init
+				DEBUG_CLEANUP("Starting Reduce()")
 				for ev := range input {
 					if IsCompleteEvent(ev) || IsErrorEvent(ev) {
 						DEBUG_FLOW("Reduce:", ev)
@@ -166,13 +168,20 @@ func Subscribe(onNext, onError, onComplete ObserverFunc) Operator {
 		return ObservableFunc(func(obs Observer) {
 			input = make(chan Event)
 			go func() {
+				DEBUG_CLEANUP("Starting Subscribe()")
 				for ev := range input {
 					obs.Next(ev)
 				}
-				DEBUG_CLEANUP("Closing Observe()")
+				DEBUG_CLEANUP("Closing Subscribe()")
 			}()
 		})
 	}
+}
+
+func consume() Observer {
+	return ObserverFunc(func(ev Event) {
+		DEBUG_FLOW("consume", ev)
+	})
 }
 
 func Chain(o Observable, ops ...Operator) Observable {
@@ -180,6 +189,7 @@ func Chain(o Observable, ops ...Operator) Observable {
 	for _, op := range ops {
 		chained = op(chained)
 	}
+	chained.Observe(consume())
 	return chained
 }
 

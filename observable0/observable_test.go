@@ -12,20 +12,29 @@ var CHATTY = func() (result bool) {
 	return
 }()
 
+var SAVED_DEBUG_FLOW func(string, Event)
+var SAVED_DEBUG_CLEANUP func(string)
+
 func debug(t *testing.T) {
 	if !CHATTY {
 		return
 	}
 	var seq int
+	SAVED_DEBUG_FLOW = DEBUG_FLOW
 	DEBUG_FLOW = func(prefix string, ev Event) {
 
-		t.Logf("%s: %d -> %s, \t\t%v, \t\t%T", time.Now(), seq, prefix, ev, ev)
+		t.Logf("%s: %d -> %s, \t%v, \t%T", time.Now(), seq, prefix, ev, ev)
 		seq++
 	}
-
+	SAVED_DEBUG_CLEANUP = DEBUG_CLEANUP
 	DEBUG_CLEANUP = func(msg string) {
 		t.Log(msg)
 	}
+}
+
+func undebug() {
+	DEBUG_FLOW = SAVED_DEBUG_FLOW
+	DEBUG_CLEANUP = SAVED_DEBUG_CLEANUP
 }
 
 func print(t *testing.T, prefix string) func(Event) {
@@ -36,6 +45,7 @@ func print(t *testing.T, prefix string) func(Event) {
 
 func TestObservable(t *testing.T) {
 	debug(t)
+	defer undebug()
 	Chain(
 		Create(func(obs Observer) {
 			for i := 0; i < 10; i++ {
@@ -50,7 +60,10 @@ func TestObservable(t *testing.T) {
 		Reduce(func(ev1, ev2 Event) Event {
 			return ev1.(int) + ev2.(int)
 		}, 0),
-		Subscribe(print(t, "next"), print(t, "error"), print(t, "completed")),
+		Subscribe(print(t, "Next"), print(t, "Error"), print(t, "Completed")),
+		Map(func(ev Event) Event {
+			return ev
+		}),
 	)
 	time.Sleep(time.Second)
 }
