@@ -85,22 +85,51 @@ type Operator func(Observable) Observable
 type MapFunc func(Event) Event
 
 func Map(mapfn MapFunc) Operator {
+	return OperatorFunc(func(obs Observer, cur, last Event) Event {
+		next := mapfn(cur)
+		obs.Next(next)
+		return next
+	}, "Map()", nil)
+}
+
+type ReduceFunc func(left, right Event) Event
+
+func Reduce(reducefn ReduceFunc, init Event) Operator {
+	return OperatorFunc(func(obs Observer, cur, last Event) Event {
+		next := reducefn(last, cur)
+		obs.Next(next)
+		return next
+	}, "Reduce()", init)
+}
+
+type FilterFunc func(Event) bool
+
+func Filter(filterfn FilterFunc) Operator {
+	return OperatorFunc(func(obs Observer, cur, last Event) Event {
+		if ok := filterfn(cur); ok {
+			obs.Next(cur)
+		}
+		return cur
+	}, "Filter()", nil)
+}
+
+func OperatorFunc(do func(obs Observer, cur, last Event) Event, name string, init Event) Operator {
 	return func(o Observable) Observable {
 		return ObservableFunc(func(obs Observer) {
 			input := make(chan Event)
 			go func() {
-				DEBUG_CLEANUP("Starting Map()")
+				last := init
+				DEBUG_CLEANUP("Starting " + name)
 				for ev := range input {
 					if IsCompleteEvent(ev) || IsErrorEvent(ev) {
-						DEBUG_FLOW("Map:", ev)
+						DEBUG_FLOW(name, ev)
 						obs.Next(ev)
 					} else {
-						val := mapfn(ev)
-						DEBUG_FLOW("Map:", val)
-						obs.Next(val)
+						last = do(obs, ev, last)
+						DEBUG_FLOW(name, last)
 					}
 				}
-				DEBUG_CLEANUP("Closing Map()")
+				DEBUG_CLEANUP("Closing " + name)
 			}()
 			o.Observe(ObserverFunc(func(ev Event) {
 				input <- ev
@@ -112,34 +141,9 @@ func Map(mapfn MapFunc) Operator {
 	}
 }
 
-type ReduceFunc func(left, right Event) Event
-
-func Reduce(reducefn ReduceFunc, init Event) Operator {
-	return func(o Observable) Observable {
-		return ObservableFunc(func(obs Observer) {
-			input := make(chan Event)
-			go func() {
-				next := init
-				DEBUG_CLEANUP("Starting Reduce()")
-				for ev := range input {
-					if IsCompleteEvent(ev) || IsErrorEvent(ev) {
-						DEBUG_FLOW("Reduce:", ev)
-						obs.Next(ev)
-					} else {
-						next = reducefn(next, ev)
-						DEBUG_FLOW("Reduce:", next)
-						obs.Next(next)
-					}
-				}
-				DEBUG_CLEANUP("Closing Reduce()")
-			}()
-			o.Observe(ObserverFunc(func(ev Event) {
-				input <- ev
-				if IsCompleteEvent(ev) || IsErrorEvent(ev) {
-					close(input)
-				}
-			}))
-		})
+func closeIfOpen(input chan Event) {
+	if input != nil {
+		close(input)
 	}
 }
 
@@ -149,20 +153,16 @@ func Subscribe(onNext, onError, onComplete ObserverFunc) Operator {
 		var last Event
 		o.Observe(ObserverFunc(func(ev Event) {
 			DEBUG_FLOW("Observed:", ev)
-			if !IsCompleteEvent(ev) && !IsErrorEvent(ev) {
+			switch ev.(type) {
+			case CompleteEvent:
+				onComplete(last)
+				closeIfOpen(input)
+			case ErrorEvent:
+				onError(ev)
+				closeIfOpen(input)
+			default:
 				last = ev
 				onNext(ev)
-			}
-			if input != nil {
-				input <- ev
-				if IsCompleteEvent(ev) {
-					onComplete(last)
-					close(input)
-				}
-				if IsErrorEvent(ev) {
-					onError(ev)
-					close(input)
-				}
 			}
 		}))
 		return ObservableFunc(func(obs Observer) {

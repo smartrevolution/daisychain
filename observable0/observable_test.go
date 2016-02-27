@@ -2,6 +2,7 @@ package observable0
 
 import (
 	"flag"
+	"sync"
 	"testing"
 	"time"
 )
@@ -46,6 +47,9 @@ func print(t *testing.T, prefix string) func(Event) {
 func TestObservable(t *testing.T) {
 	debug(t)
 	defer undebug()
+
+	var wg sync.WaitGroup
+	wg.Add(1)
 	Chain(
 		Create(func(obs Observer) {
 			for i := 0; i < 10; i++ {
@@ -60,10 +64,16 @@ func TestObservable(t *testing.T) {
 		Reduce(func(ev1, ev2 Event) Event {
 			return ev1.(int) + ev2.(int)
 		}, 0),
-		Subscribe(print(t, "Next"), print(t, "Error"), print(t, "Completed")),
+		Filter(func(ev Event) bool {
+			return ev.(int) > 20
+		}),
+		// Subscribe(print(t, "Next1"), print(t, "Error"), print(t, "Completed")),
 		Map(func(ev Event) Event {
-			return ev
+			return ev.(int) + 100
+		}),
+		Subscribe(print(t, "Next2"), print(t, "Error"), func(ev Event) {
+			wg.Done()
 		}),
 	)
-	time.Sleep(time.Second)
+	wg.Wait()
 }
