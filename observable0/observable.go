@@ -140,18 +140,24 @@ func closeIfOpen(input chan Event) {
 	}
 }
 
+func callIfNotNil(onEvent ObserverFunc, ev Event) {
+	if onEvent != nil {
+		onEvent(ev)
+	}
+}
+
 func Subscribe(o Observable, onNext, onError, onComplete ObserverFunc) {
 	var last Event
 	o.Observe(ObserverFunc(func(ev Event) {
-		DEBUG_FLOW("Observed:", ev)
+		DEBUG_FLOW("Subscribe:", ev)
 		switch ev.(type) {
 		case CompleteEvent:
-			onComplete(last)
+			callIfNotNil(onComplete, last)
 		case ErrorEvent:
-			onError(ev)
+			callIfNotNil(onError, ev)
 		default:
 			last = ev
-			onNext(ev)
+			callIfNotNil(onNext, ev)
 		}
 	}))
 }
@@ -162,16 +168,16 @@ func SubscribeAndWait(o Observable, onNext, onError, onComplete ObserverFunc) {
 
 	wg.Add(1)
 	o.Observe(ObserverFunc(func(ev Event) {
-		DEBUG_FLOW("Observed:", ev)
+		DEBUG_FLOW("SubscribeAndWait:", ev)
 		switch ev.(type) {
 		case CompleteEvent:
-			onComplete(last)
+			callIfNotNil(onComplete, last)
 			wg.Done()
 		case ErrorEvent:
-			onError(ev)
+			callIfNotNil(onError, ev)
 		default:
 			last = ev
-			onNext(ev)
+			callIfNotNil(onNext, ev)
 		}
 	}))
 	wg.Wait()
@@ -197,11 +203,12 @@ func Create(o ObservableFunc, ops ...Operator) Observable {
 	})
 }
 
-func From(evts ...Event) ObservableFunc {
+func Just(evts ...Event) ObservableFunc {
 	return func(obs Observer) {
 		for _, ev := range evts {
 			DEBUG_FLOW("From", ev)
 			obs.Next(ev)
 		}
+		obs.Next(Complete())
 	}
 }

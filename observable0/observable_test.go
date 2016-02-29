@@ -12,23 +12,15 @@ var CHATTY = func() (result bool) {
 	return
 }()
 
-var SAVED_DEBUG_FLOW func(string, Event)
-
 func debug(t *testing.T) {
 	if !CHATTY {
 		return
 	}
 	var seq int
-	SAVED_DEBUG_FLOW = DEBUG_FLOW
 	DEBUG_FLOW = func(prefix string, ev Event) {
-
 		t.Logf("%s: %d -> %s, \t%v, \t%T", time.Now(), seq, prefix, ev, ev)
 		seq++
 	}
-}
-
-func undebug() {
-	DEBUG_FLOW = SAVED_DEBUG_FLOW
 }
 
 func print(t *testing.T, prefix string) func(Event) {
@@ -37,18 +29,26 @@ func print(t *testing.T, prefix string) func(Event) {
 	}
 }
 
-func TestObservable(t *testing.T) {
+func TestMap(t *testing.T) {
 	debug(t)
-	defer undebug()
-
 	o := Create(
-		func(obs Observer) {
-			for i := 0; i < 10; i++ {
-				DEBUG_FLOW("Create", i)
-				obs.Next(i)
-			}
-			obs.Next(Complete())
-		},
+		Just(0, 1, 2, 3, 4, 5),
+		Map(func(ev Event) Event {
+			return ev.(int) * 2
+		}),
+	)
+
+	SubscribeAndWait(o, nil, nil, func(ev Event) {
+		if n, ok := ev.(int); !(ok && n == 10) {
+			t.Error("Expected: 10, Got:", n)
+		}
+	})
+}
+
+func TestAll(t *testing.T) {
+	debug(t)
+	o := Create(
+		Just(0, 1, 2, 3, 4, 5, 6, 7, 8, 9),
 		Map(func(ev Event) Event {
 			return ev.(int) * ev.(int)
 		}),
@@ -61,9 +61,9 @@ func TestObservable(t *testing.T) {
 		Map(func(ev Event) Event {
 			return ev.(int) + 10000
 		}),
-		Debug(func(obs Observer, cur, last Event) {
-			t.Logf("DEBUG0 %#v, cur:%#v, last:%#v", obs, cur, last)
-		}),
+		// Debug(func(obs Observer, cur, last Event) {
+		// 	t.Logf("DEBUG0 %#v, cur:%#v, last:%#v", obs, cur, last)
+		// }),
 	)
 
 	SubscribeAndWait(o, print(t, "Next"), print(t, "Error"), print(t, "Completed"))
