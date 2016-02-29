@@ -2,7 +2,6 @@ package observable0
 
 import (
 	"flag"
-	"sync"
 	"testing"
 	"time"
 )
@@ -14,7 +13,6 @@ var CHATTY = func() (result bool) {
 }()
 
 var SAVED_DEBUG_FLOW func(string, Event)
-var SAVED_DEBUG_CLEANUP func(string)
 
 func debug(t *testing.T) {
 	if !CHATTY {
@@ -27,15 +25,10 @@ func debug(t *testing.T) {
 		t.Logf("%s: %d -> %s, \t%v, \t%T", time.Now(), seq, prefix, ev, ev)
 		seq++
 	}
-	SAVED_DEBUG_CLEANUP = DEBUG_CLEANUP
-	DEBUG_CLEANUP = func(msg string) {
-		t.Log(msg)
-	}
 }
 
 func undebug() {
 	DEBUG_FLOW = SAVED_DEBUG_FLOW
-	DEBUG_CLEANUP = SAVED_DEBUG_CLEANUP
 }
 
 func print(t *testing.T, prefix string) func(Event) {
@@ -48,16 +41,14 @@ func TestObservable(t *testing.T) {
 	debug(t)
 	defer undebug()
 
-	var wg sync.WaitGroup
-	wg.Add(1)
-	Chain(
-		Create(func(obs Observer) {
+	o := Create(
+		func(obs Observer) {
 			for i := 0; i < 10; i++ {
 				DEBUG_FLOW("Create", i)
 				obs.Next(i)
 			}
 			obs.Next(Complete())
-		}),
+		},
 		Map(func(ev Event) Event {
 			return ev.(int) * ev.(int)
 		}),
@@ -67,13 +58,13 @@ func TestObservable(t *testing.T) {
 		Filter(func(ev Event) bool {
 			return ev.(int) > 20
 		}),
-		// Subscribe(print(t, "Next1"), print(t, "Error"), print(t, "Completed")),
 		Map(func(ev Event) Event {
-			return ev.(int) + 100
+			return ev.(int) + 10000
 		}),
-		Subscribe(print(t, "Next2"), print(t, "Error"), func(ev Event) {
-			wg.Done()
+		Debug(func(obs Observer, cur, last Event) {
+			t.Logf("DEBUG0 %#v, cur:%#v, last:%#v", obs, cur, last)
 		}),
 	)
-	wg.Wait()
+
+	SubscribeAndWait(o, print(t, "Next"), print(t, "Error"), print(t, "Completed"))
 }
