@@ -29,6 +29,19 @@ func print(t *testing.T, prefix string) func(Event) {
 	}
 }
 
+type obj struct {
+	v int
+}
+
+func (this obj) add(other obj) obj {
+	return obj{this.v + other.v}
+}
+
+var testNils []Event = []Event{nil, nil, nil}
+var testNumbers []Event = []Event{0, 1, 2, 3, 4, 5}
+var testStrings []Event = []Event{"a", "b", "c", "d", "e", "f"}
+var testObjects []Event = []Event{obj{0}, obj{1}, obj{2}}
+
 func TestMap(t *testing.T) {
 	debug(t)
 
@@ -38,10 +51,7 @@ func TestMap(t *testing.T) {
 		check func(ev Event)
 	}{
 		{
-			[]Event{
-				0, 1, 2, 3, 4, 5,
-			},
-
+			testNumbers,
 			func(ev Event) Event { return ev.(int) * 2 },
 			func(ev Event) {
 				if n, ok := ev.(int); !(ok && n == 10) {
@@ -50,14 +60,20 @@ func TestMap(t *testing.T) {
 			},
 		},
 		{
-			[]Event{
-				"a", "b", "c", "d", "e", "f",
-			},
-
+			testStrings,
 			func(ev Event) Event { return ev.(string) + "oo" },
 			func(ev Event) {
 				if s, ok := ev.(string); !(ok && s == "foo") {
 					t.Error("Expected: foo, Got:", s)
+				}
+			},
+		},
+		{
+			testObjects,
+			func(ev Event) Event { return obj{ev.(obj).v + 1000} },
+			func(ev Event) {
+				if o, ok := ev.(obj); !(ok && o.v == 1002) {
+					t.Error("Expected: 1002, Got:", o.v)
 				}
 			},
 		},
@@ -67,6 +83,58 @@ func TestMap(t *testing.T) {
 		o := Create(
 			Just(test.input...),
 			Map(test.mapfn),
+		)
+		SubscribeAndWait(o, nil, nil, func(ev Event) {
+			test.check(ev)
+		})
+	}
+}
+
+func TestReduce(t *testing.T) {
+	debug(t)
+
+	var tests = []struct {
+		input    []Event
+		reducefn ReduceFunc
+		init     Event
+		check    func(ev Event)
+	}{
+		{
+			testNumbers,
+			func(ev1, ev2 Event) Event { return ev1.(int) + ev2.(int) },
+			0,
+			func(ev Event) {
+				if n, ok := ev.(int); !(ok && n == 15) {
+					t.Error("Expected: 15, Got:", n)
+				}
+			},
+		},
+		{
+			testStrings,
+			func(ev1, ev2 Event) Event { return ev1.(string) + ev2.(string) },
+			"",
+			func(ev Event) {
+				if s, ok := ev.(string); !(ok && s == "abcdef") {
+					t.Error("Expected: abcdef, Got:", s)
+				}
+			},
+		},
+		{
+			testObjects,
+			func(ev1, ev2 Event) Event { return ev1.(obj).add(ev2.(obj)) },
+			obj{},
+			func(ev Event) {
+				if o, ok := ev.(obj); !(ok && o.v == 3) {
+					t.Error("Expected: 6, Got:", o.v)
+				}
+			},
+		},
+	}
+
+	for _, test := range tests {
+		o := Create(
+			Just(test.input...),
+			Reduce(test.reducefn, test.init),
 		)
 		SubscribeAndWait(o, nil, nil, func(ev Event) {
 			test.check(ev)
