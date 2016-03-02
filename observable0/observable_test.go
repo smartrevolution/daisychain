@@ -31,18 +31,47 @@ func print(t *testing.T, prefix string) func(Event) {
 
 func TestMap(t *testing.T) {
 	debug(t)
-	o := Create(
-		Just(0, 1, 2, 3, 4, 5),
-		Map(func(ev Event) Event {
-			return ev.(int) * 2
-		}),
-	)
 
-	SubscribeAndWait(o, nil, nil, func(ev Event) {
-		if n, ok := ev.(int); !(ok && n == 10) {
-			t.Error("Expected: 10, Got:", n)
-		}
-	})
+	var tests = []struct {
+		input []Event
+		mapfn MapFunc
+		check func(ev Event)
+	}{
+		{
+			[]Event{
+				0, 1, 2, 3, 4, 5,
+			},
+
+			func(ev Event) Event { return ev.(int) * 2 },
+			func(ev Event) {
+				if n, ok := ev.(int); !(ok && n == 10) {
+					t.Error("Expected: 10, Got:", n)
+				}
+			},
+		},
+		{
+			[]Event{
+				"a", "b", "c", "d", "e", "f",
+			},
+
+			func(ev Event) Event { return ev.(string) + "oo" },
+			func(ev Event) {
+				if s, ok := ev.(string); !(ok && s == "foo") {
+					t.Error("Expected: foo, Got:", s)
+				}
+			},
+		},
+	}
+
+	for _, test := range tests {
+		o := Create(
+			Just(test.input...),
+			Map(test.mapfn),
+		)
+		SubscribeAndWait(o, nil, nil, func(ev Event) {
+			test.check(ev)
+		})
+	}
 }
 
 func TestAll(t *testing.T) {
