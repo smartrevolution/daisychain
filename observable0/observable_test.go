@@ -104,7 +104,7 @@ func TestMap(t *testing.T) {
 	}
 }
 
-func TestReduce(t *testing.T) {
+func TestScan(t *testing.T) {
 	debug(t)
 
 	var tests = []struct {
@@ -163,12 +163,44 @@ func TestReduce(t *testing.T) {
 	for _, test := range tests {
 		o := Create(
 			Just(test.input...),
-			Reduce(test.reducefn, test.init),
+			Scan(test.reducefn, test.init),
 		)
 		SubscribeAndWait(o, nil, nil, func(ev Event) {
 			test.check(ev)
 		})
 	}
+}
+
+func TestSkip(t *testing.T) {
+	debug(t)
+	o := Create(
+		Just(1, 2, 3, 4, 5),
+		Skip(3),
+		Reduce(func(ev1, ev2 Event) Event {
+			return ev1.(int) + ev2.(int)
+		}, 0),
+	)
+	SubscribeAndWait(o, print(t, "Next"), print(t, "Error"), func(ev Event) {
+		if n, ok := ev.(int); !(ok && n == 9) {
+			t.Error("Expected: 9, Got:", n)
+		}
+	})
+}
+
+func TestTake(t *testing.T) {
+	debug(t)
+	o := Create(
+		Just(1, 2, 3, 4, 5),
+		Take(3),
+		Reduce(func(ev1, ev2 Event) Event {
+			return ev1.(int) + ev2.(int)
+		}, 0),
+	)
+	SubscribeAndWait(o, print(t, "Next"), print(t, "Error"), func(ev Event) {
+		if n, ok := ev.(int); !(ok && n == 6) {
+			t.Error("Expected: 6, Got:", n)
+		}
+	})
 }
 
 func TestAll(t *testing.T) {
@@ -178,7 +210,7 @@ func TestAll(t *testing.T) {
 		Map(func(ev Event) Event {
 			return ev.(int) * ev.(int)
 		}),
-		Reduce(func(ev1, ev2 Event) Event {
+		Scan(func(ev1, ev2 Event) Event {
 			return ev1.(int) + ev2.(int)
 		}, 0),
 		Filter(func(ev Event) bool {
@@ -240,7 +272,7 @@ func TestComposition(t *testing.T) {
 	)
 	o2 := Create(
 		o1,
-		Reduce(func(ev1, ev2 Event) Event {
+		Scan(func(ev1, ev2 Event) Event {
 			return ev1.(int) + ev2.(int)
 		}, 0),
 	)
@@ -248,6 +280,20 @@ func TestComposition(t *testing.T) {
 	SubscribeAndWait(o2, print(t, "Next"), print(t, "Error"), func(ev Event) {
 		if n, ok := ev.(int); !(ok && n == 33) {
 			t.Error("Expected: 33, Got:", n)
+		}
+	})
+}
+func TestReduce(t *testing.T) {
+	debug(t)
+	o := Create(
+		Just(1, 2, 3),
+		Reduce(func(ev1, ev2 Event) Event {
+			return ev1.(int) + ev2.(int)
+		}, 0),
+	)
+	SubscribeAndWait(o, print(t, "Next"), print(t, "Error"), func(ev Event) {
+		if n, ok := ev.(int); !(ok && n == 6) {
+			t.Error("Expected: 6, Got:", n)
 		}
 	})
 }
@@ -260,7 +306,7 @@ func addInts(upto int) Observable {
 			}
 			obs.Next(Complete())
 		}),
-		Reduce(func(ev1, ev2 Event) Event {
+		Scan(func(ev1, ev2 Event) Event {
 			return ev1.(int) + ev2.(int)
 		}, 0),
 	)

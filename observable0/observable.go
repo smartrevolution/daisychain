@@ -74,7 +74,7 @@ func Map(mapfn MapFunc) Operator {
 		next := mapfn(cur)
 		obs.Next(next)
 		return next
-	}, "Map()", nil)
+	}, "Map()", nil, true)
 }
 
 type ReduceFunc func(left, right Event) Event
@@ -84,7 +84,45 @@ func Reduce(reducefn ReduceFunc, init Event) Operator {
 		next := reducefn(last, cur)
 		obs.Next(next)
 		return next
-	}, "Reduce()", init)
+	}, "Reduce()", init, true)
+}
+
+func Scan(reducefn ReduceFunc, init Event) Operator {
+	return OperatorFunc(func(obs Observer, cur, last Event) Event {
+		var next Event
+		if IsCompleteEvent(cur) || IsErrorEvent(cur) {
+			obs.Next(last)
+			obs.Next(cur)
+
+		} else {
+			next = reducefn(last, cur)
+		}
+		return next
+	}, "Scan()", init, false)
+}
+
+func Skip(n int) Operator {
+	var count int
+	return OperatorFunc(func(obs Observer, cur, last Event) Event {
+		if count == n {
+			obs.Next(cur)
+
+		} else {
+			count += 1
+		}
+		return cur
+	}, "Skip()", nil, true)
+}
+
+func Take(n int) Operator {
+	var count int
+	return OperatorFunc(func(obs Observer, cur, last Event) Event {
+		if count < n {
+			obs.Next(cur)
+			count += 1
+		}
+		return cur
+	}, "Take()", nil, true)
 }
 
 type FilterFunc func(Event) bool
@@ -95,7 +133,7 @@ func Filter(filterfn FilterFunc) Operator {
 			obs.Next(cur)
 		}
 		return cur
-	}, "Filter()", nil)
+	}, "Filter()", nil, true)
 }
 
 type DebugFunc func(obs Observer, cur, last Event)
@@ -105,10 +143,12 @@ func Debug(debugfn DebugFunc) Operator {
 		debugfn(obs, cur, last)
 		obs.Next(cur)
 		return cur
-	}, "DEBUG()", nil)
+	}, "DEBUG()", nil, true)
 }
 
-func OperatorFunc(do func(obs Observer, cur, last Event) Event, name string, init Event) Operator {
+type BodyFunc func(obs Observer, cur, last Event) Event
+
+func OperatorFunc(do BodyFunc, name string, init Event, shouldFilter bool) Operator {
 	return func(o Observable) Observable {
 		return ObservableFunc(func(obs Observer) {
 			input := make(chan Event, 10)
@@ -116,7 +156,7 @@ func OperatorFunc(do func(obs Observer, cur, last Event) Event, name string, ini
 				last := init
 				TRACE("Starting", name)
 				for ev := range input {
-					if IsCompleteEvent(ev) || IsErrorEvent(ev) {
+					if shouldFilter && (IsCompleteEvent(ev) || IsErrorEvent(ev)) {
 						TRACE(name, ev)
 						obs.Next(ev)
 					} else {
