@@ -111,7 +111,7 @@ func Debug(debugfn DebugFunc) Operator {
 func OperatorFunc(do func(obs Observer, cur, last Event) Event, name string, init Event) Operator {
 	return func(o Observable) Observable {
 		return ObservableFunc(func(obs Observer) {
-			input := make(chan Event)
+			input := make(chan Event, 10)
 			go func() {
 				last := init
 				TRACE("Starting", name)

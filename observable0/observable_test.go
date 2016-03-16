@@ -195,6 +195,41 @@ func TestAll(t *testing.T) {
 	SubscribeAndWait(o, print(t, "Next"), print(t, "Error"), print(t, "Completed"))
 }
 
+func TestCreate(t *testing.T) {
+	debug(t)
+	o := Create(
+		ObservableFunc(func(obs Observer) {
+			for _, n := range []int{10, 20, 30} {
+				obs.Next(n)
+			}
+			obs.Next(Complete())
+		}),
+	)
+
+	SubscribeAndWait(o, print(t, "Next"), print(t, "Error"), func(ev Event) {
+		if n, ok := ev.(int); !(ok && n == 30) {
+			t.Error("Expected: 30, Got:", n)
+		}
+	})
+}
+
+func TestSubscribe(t *testing.T) {
+	debug(t)
+	o := Create(
+		Just(11, 22, 33),
+	)
+	Subscribe(o, print(t, "Next"), print(t, "Error"), func(ev Event) {
+		if n, ok := ev.(int); !(ok && n == 33) {
+			t.Error("Expected: 33, Got:", n)
+		}
+	})
+	SubscribeAndWait(o, print(t, "Next"), print(t, "Error"), func(ev Event) {
+		if n, ok := ev.(int); !(ok && n == 33) {
+			t.Error("Expected: 33, Got:", n)
+		}
+	})
+}
+
 func TestComposition(t *testing.T) {
 	debug(t)
 	o1 := Create(
@@ -216,3 +251,28 @@ func TestComposition(t *testing.T) {
 		}
 	})
 }
+
+func addInts(upto int) Observable {
+	return Create(
+		ObservableFunc(func(obs Observer) {
+			for i := 0; i < upto; i++ {
+				obs.Next(i)
+			}
+			obs.Next(Complete())
+		}),
+		Reduce(func(ev1, ev2 Event) Event {
+			return ev1.(int) + ev2.(int)
+		}, 0),
+	)
+}
+
+func benchmarkAdd(i int, b *testing.B) {
+	o := addInts(i)
+	for n := 0; n < b.N; n++ {
+		SubscribeAndWait(o, nil, nil, nil)
+	}
+}
+
+func BenchmarkAdd10(b *testing.B)      { benchmarkAdd(10, b) }
+func BenchmarkAdd1000(b *testing.B)    { benchmarkAdd(1000, b) }
+func BenchmarkAdd1000000(b *testing.B) { benchmarkAdd(1000000, b) }
