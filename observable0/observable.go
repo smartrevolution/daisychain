@@ -4,7 +4,7 @@ import (
 	"sync"
 )
 
-var DEBUG_FLOW = func(prefix string, ev Event) {
+var TRACE = func(prefix string, ev Event) {
 	//do nothing, will be set while testing
 }
 
@@ -49,6 +49,7 @@ type Observable interface {
 
 type ObservableFunc func(Observer)
 
+// Observe method implements the Observable interface on the fly.
 func (o ObservableFunc) Observe(obs Observer) {
 	o(obs)
 }
@@ -59,6 +60,7 @@ type Observer interface {
 
 type ObserverFunc func(Event)
 
+// Next method implements the Observer interface on the fly.
 func (o ObserverFunc) Next(ev Event) {
 	o(ev)
 }
@@ -112,17 +114,17 @@ func OperatorFunc(do func(obs Observer, cur, last Event) Event, name string, ini
 			input := make(chan Event)
 			go func() {
 				last := init
-				DEBUG_FLOW("Starting", name)
+				TRACE("Starting", name)
 				for ev := range input {
 					if IsCompleteEvent(ev) || IsErrorEvent(ev) {
-						DEBUG_FLOW(name, ev)
+						TRACE(name, ev)
 						obs.Next(ev)
 					} else {
 						last = do(obs, ev, last)
-						DEBUG_FLOW(name, last)
+						TRACE(name, last)
 					}
 				}
-				DEBUG_FLOW("Closing", name)
+				TRACE("Closing", name)
 			}()
 			o.Observe(ObserverFunc(func(ev Event) {
 				input <- ev
@@ -149,7 +151,7 @@ func callIfNotNil(onEvent ObserverFunc, ev Event) {
 func Subscribe(o Observable, onNext, onError, onComplete ObserverFunc) {
 	var last Event
 	o.Observe(ObserverFunc(func(ev Event) {
-		DEBUG_FLOW("Subscribe:", ev)
+		TRACE("Subscribe:", ev)
 		switch ev.(type) {
 		case CompleteEvent:
 			callIfNotNil(onComplete, last)
@@ -168,7 +170,7 @@ func SubscribeAndWait(o Observable, onNext, onError, onComplete ObserverFunc) {
 
 	wg.Add(1)
 	o.Observe(ObserverFunc(func(ev Event) {
-		DEBUG_FLOW("SubscribeAndWait:", ev)
+		TRACE("SubscribeAndWait:", ev)
 		switch ev.(type) {
 		case CompleteEvent:
 			callIfNotNil(onComplete, last)
@@ -183,11 +185,9 @@ func SubscribeAndWait(o Observable, onNext, onError, onComplete ObserverFunc) {
 	wg.Wait()
 }
 
-func build(o ObservableFunc, ops ...Operator) Observable {
-	var chained Observable
-	chained = ObservableFunc(func(obs Observer) {
-		o(obs)
-	})
+func build(o Observable /*Func*/, ops ...Operator) Observable {
+	var chained Observable = o
+
 	for _, op := range ops {
 		chained = op(chained)
 	}
@@ -195,18 +195,15 @@ func build(o ObservableFunc, ops ...Operator) Observable {
 
 }
 
-func Create(o ObservableFunc, ops ...Operator) Observable {
-	DEBUG_FLOW("Create", o)
-	return ObservableFunc(func(obs Observer) {
-		chained := build(o, ops...)
-		chained.Observe(obs)
-	})
+func Create(o Observable /*Func*/, ops ...Operator) Observable {
+	TRACE("Create", o)
+	return build(o, ops...)
 }
 
 func Just(evts ...Event) ObservableFunc {
 	return func(obs Observer) {
 		for _, ev := range evts {
-			DEBUG_FLOW("From", ev)
+			TRACE("Just", ev)
 			obs.Next(ev)
 		}
 		obs.Next(Complete())

@@ -17,7 +17,7 @@ func debug(t *testing.T) {
 		return
 	}
 	var seq int
-	DEBUG_FLOW = func(prefix string, ev Event) {
+	TRACE = func(prefix string, ev Event) {
 		t.Logf("%s: %d -> %s, \t%v, \t%T", time.Now(), seq, prefix, ev, ev)
 		seq++
 	}
@@ -50,6 +50,20 @@ func TestMap(t *testing.T) {
 		mapfn MapFunc
 		check func(ev Event)
 	}{
+		{
+			testNils,
+			func(ev Event) Event {
+				if _, ok := ev.(int); !ok {
+					return nil
+				}
+				return 999
+			},
+			func(ev Event) {
+				if ev != nil {
+					t.Error("Expected: nil, Got:", ev)
+				}
+			},
+		},
 		{
 			testNumbers,
 			func(ev Event) Event { return ev.(int) * 2 },
@@ -99,6 +113,21 @@ func TestReduce(t *testing.T) {
 		init     Event
 		check    func(ev Event)
 	}{
+		{
+			testNils,
+			func(ev1, ev2 Event) Event {
+				if _, ok := ev1.(int); !ok {
+					return nil
+				}
+				return 999
+			},
+			nil,
+			func(ev Event) {
+				if ev != nil {
+					t.Error("Expected: nil, Got:", ev)
+				}
+			},
+		},
 		{
 			testNumbers,
 			func(ev1, ev2 Event) Event { return ev1.(int) + ev2.(int) },
@@ -164,4 +193,26 @@ func TestAll(t *testing.T) {
 	)
 
 	SubscribeAndWait(o, print(t, "Next"), print(t, "Error"), print(t, "Completed"))
+}
+
+func TestComposition(t *testing.T) {
+	debug(t)
+	o1 := Create(
+		Just(2, 3, 5, 7, 11),
+		Map(func(ev Event) Event {
+			return ev.(int) + 1
+		}),
+	)
+	o2 := Create(
+		o1,
+		Reduce(func(ev1, ev2 Event) Event {
+			return ev1.(int) + ev2.(int)
+		}, 0),
+	)
+
+	SubscribeAndWait(o2, print(t, "Next"), print(t, "Error"), func(ev Event) {
+		if n, ok := ev.(int); !(ok && n == 33) {
+			t.Error("Expected: 33, Got:", n)
+		}
+	})
 }
