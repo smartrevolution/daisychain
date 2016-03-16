@@ -171,6 +171,25 @@ func TestScan(t *testing.T) {
 	}
 }
 
+func TestFlatMap(t *testing.T) {
+	o := Create(
+		Just(1, 2, 3, 4, 5),
+		FlatMap(func(ev Event) Observable {
+			return Create(
+				Just(ev, ev),
+			)
+		}),
+		Reduce(func(ev1, ev2 Event) Event {
+			return ev1.(int) + ev2.(int)
+		}, 0),
+	)
+	SubscribeAndWait(o, print(t, "Next"), print(t, "Error"), func(ev Event) {
+		if n, ok := ev.(int); !(ok && n == 30) {
+			t.Error("Expected: 30, Got:", n)
+		}
+	})
+}
+
 func TestSkip(t *testing.T) {
 	debug(t)
 	o := Create(

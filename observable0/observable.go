@@ -77,6 +77,20 @@ func Map(mapfn MapFunc) Operator {
 	}, "Map()", nil, true)
 }
 
+type FlatMapFunc func(ev Event) Observable
+
+func FlatMap(flatmapfn FlatMapFunc) Operator {
+	return OperatorFunc(func(obs Observer, cur, last Event) Event {
+		var next Event
+		o := flatmapfn(cur)
+		SubscribeAndWait(o, func(ev Event) {
+			next = ev
+			obs.Next(next)
+		}, nil, nil)
+		return next
+	}, "FlatMap()", nil, true)
+}
+
 type ReduceFunc func(left, right Event) Event
 
 func Reduce(reducefn ReduceFunc, init Event) Operator {
