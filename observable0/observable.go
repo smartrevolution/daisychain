@@ -225,7 +225,7 @@ func SubscribeAndWait(o Observable, onNext, onError, onComplete ObserverFunc) {
 	wg.Wait()
 }
 
-func build(o Observable /*Func*/, ops ...Operator) Observable {
+func build(o Observable, ops ...Operator) Observable {
 	var chained Observable = o
 
 	for _, op := range ops {
@@ -235,17 +235,17 @@ func build(o Observable /*Func*/, ops ...Operator) Observable {
 
 }
 
-func Create(o Observable /*Func*/, ops ...Operator) Observable {
+func Create(o Observable, ops ...Operator) Observable {
 	TRACE("Create", o)
 	return build(o, ops...)
 }
 
-func Just(evts ...Event) ObservableFunc {
-	return func(obs Observer) {
+func Just(evts ...Event) Observable {
+	return ObservableFunc(func(obs Observer) {
 		for _, ev := range evts {
 			TRACE("Just", ev)
 			obs.Next(ev)
 		}
 		obs.Next(Complete())
-	}
+	})
 }
