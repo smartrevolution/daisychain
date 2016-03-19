@@ -1,4 +1,4 @@
-package observable0
+package daisychain
 
 import (
 	"sync"
