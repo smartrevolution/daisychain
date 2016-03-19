@@ -1,11 +1,26 @@
 package daisychain
 
 import (
+	"log"
 	"sync"
+	"time"
 )
 
+var Trace bool = false
+
 var TRACE = func(prefix string, ev Event) {
-	//do nothing, will be set while testing
+	//set var Trace=true
+}
+
+func init() {
+	if !Trace {
+		return
+	}
+	var seq int
+	TRACE = func(prefix string, ev Event) {
+		log.Printf("%s: %d -> %s, \t%v, \t%T", time.Now(), seq, prefix, ev, ev)
+		seq++
+	}
 }
 
 type Event interface{}
