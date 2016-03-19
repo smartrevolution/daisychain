@@ -111,7 +111,7 @@ func testNewMapReduceSub(t *testing.T, wg *sync.WaitGroup) *O {
 	}, 0)
 	r.Subscribe(nil, nil, func(ev Event) {
 		DEBUG_FLOW("Subscribe", ev)
-		if val, ok := ev.(int); !(ok && val == 9) {
+		if val, ok := ev.(int); !(ok && val == 285) {
 			t.Errorf("Expected: int (9), Got: %T (%v)", ev, ev)
 		}
 	})
@@ -189,8 +189,8 @@ func TestFlatMap(t *testing.T) {
 	flatmapped := mapped.FlatMap(func(ev Event) *O {
 		observable = New().
 			Map(func(ev Event) Event {
-			return ev.(int) + 1
-		})
+				return ev.(int) + 1
+			})
 		return observable
 	})
 	flatmapped.Subscribe(nil, nil, func(ev Event) {
@@ -401,17 +401,17 @@ func TestGroupBy(t *testing.T) {
 func TestDistinct(t *testing.T) {
 	New().
 		Distinct(func(ev Event) string {
-		if ev.(int)%2 == 0 {
-			return "even"
-		}
-		return "odd"
-	}).
+			if ev.(int)%2 == 0 {
+				return "even"
+			}
+			return "odd"
+		}).
 		Subscribe(nil, nil, func(ev Event) {
-		if evenOdd, ok := ev.(map[string]Event); !ok && len(evenOdd) != 2 {
-			t.Log(evenOdd)
-			t.Errorf("Expected: map[even:8 odd:9], Got: %#v", evenOdd)
-		}
-	}).
+			if evenOdd, ok := ev.(map[string]Event); !ok && len(evenOdd) != 2 {
+				t.Log(evenOdd)
+				t.Errorf("Expected: map[even:8 odd:9], Got: %#v", evenOdd)
+			}
+		}).
 		From(0, 1, 2, 3, 4, 5, 6, 7, 8, 9)
 
 }
@@ -557,8 +557,6 @@ func TestReset(t *testing.T) {
 }
 
 func TestEmptyHandling(t *testing.T) {
-	//t.Parallel()
-
 	//GIVEN
 	observable := New()
 
@@ -601,8 +599,6 @@ func (e estimation) String() string {
 }
 
 func TestReduceWithStruct(t *testing.T) {
-	//t.Parallel()
-
 	//GIVEN
 	empty := estimation{
 		key: "k0",
@@ -650,18 +646,18 @@ func TestReduceWithStruct(t *testing.T) {
 func TestHoldAsO(t *testing.T) {
 	New().
 		Map(func(ev Event) Event {
-		return ev.(int) * ev.(int)
-	}).
+			return ev.(int) * ev.(int)
+		}).
 		Hold(0).
 		Observable().
 		Reduce(func(e1, e2 Event) Event {
-		return e1.(int) + e2.(int)
-	}, 0).
+			return e1.(int) + e2.(int)
+		}, 0).
 		Subscribe(func(ev Event) {
-		if val, _ := ev.(int); val != 1 && val != 5 && val != 14 {
-			t.Error(val)
-		}
-	}, nil, nil).
+			if val, _ := ev.(int); val != 1 && val != 5 && val != 14 {
+				t.Error(val)
+			}
+		}, nil, nil).
 		From(1, 2, 3)
 
 	time.Sleep(50 * time.Millisecond)
@@ -688,21 +684,21 @@ func TestHoldCollectAsO(t *testing.T) {
 func TestNoSignal(t *testing.T) {
 	New().
 		Map(func(ev Event) Event {
-		return ev.(int) * ev.(int)
-	}).
+			return ev.(int) * ev.(int)
+		}).
 		Subscribe(func(ev Event) {
-		if val, _ := ev.(int); val != 1 && val != 4 && val != 9 {
-			t.Error(val)
-		}
-	}, nil, nil).
+			if val, _ := ev.(int); val != 1 && val != 4 && val != 9 {
+				t.Error(val)
+			}
+		}, nil, nil).
 		Reduce(func(e1, e2 Event) Event {
-		return e1.(int) + e2.(int)
-	}, 0).
+			return e1.(int) + e2.(int)
+		}, 0).
 		Subscribe(func(ev Event) {
-		if val, _ := ev.(int); val != 1 && val != 5 && val != 14 {
-			t.Error(val)
-		}
-	}, nil, nil).
+			if val, _ := ev.(int); val != 1 && val != 5 && val != 14 {
+				t.Error(val)
+			}
+		}, nil, nil).
 		From(1, 2, 3)
 
 	time.Sleep(50 * time.Millisecond)

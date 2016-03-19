@@ -137,17 +137,17 @@ func (s *O) Send(ev Event) {
 
 // Complete sends a CompleteEvent down the stream
 func (s *O) Complete() {
-	s.in <- Complete()
+	s.root.in <- Complete()
 }
 
 // Error sends an ErrorEvent down the stream
 func (s *O) Error(msg string) {
-	s.in <- Error(msg)
+	s.root.in <- Error(msg)
 }
 
 // Empty sends an EmptyEvent down the stream
 func (s *O) Empty() {
-	s.in <- Empty()
+	s.root.in <- Empty()
 }
 
 // send sends an Event down the stream.
@@ -239,7 +239,7 @@ func (o *O) Connect() *O {
 func (s *O) From(evts ...Event) {
 	for _, ev := range evts {
 		DEBUG_FLOW("Send()", ev)
-		s.root.Send(ev)
+		s.Send(ev)
 	}
 }
 
