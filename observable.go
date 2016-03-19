@@ -1,7 +1,7 @@
 package daisychain
 
 import (
-	"log"
+	"fmt"
 	"sync"
 	"time"
 )
@@ -12,13 +12,13 @@ var TRACE = func(prefix string, ev Event) {
 	//set var Trace=true
 }
 
-func init() {
+func trace() {
 	if !Trace {
 		return
 	}
 	var seq int
 	TRACE = func(prefix string, ev Event) {
-		log.Printf("%s: %d -> %s, \t%v, \t%T", time.Now(), seq, prefix, ev, ev)
+		fmt.Printf("%s: %d -> %s, %#v, (type:%T)\n", time.Now(), seq, prefix, ev, ev)
 		seq++
 	}
 }
@@ -218,6 +218,7 @@ func callIfNotNil(onEvent ObserverFunc, ev Event) {
 }
 
 func Subscribe(o Observable, onNext, onError, onComplete ObserverFunc) {
+	trace()
 	var last Event
 	o.Observe(ObserverFunc(func(ev Event) {
 		TRACE("Subscribe:", ev)
@@ -234,6 +235,7 @@ func Subscribe(o Observable, onNext, onError, onComplete ObserverFunc) {
 }
 
 func SubscribeAndWait(o Observable, onNext, onError, onComplete ObserverFunc) {
+	trace()
 	var wg sync.WaitGroup
 	var last Event
 
