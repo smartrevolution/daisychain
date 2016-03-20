@@ -9,7 +9,7 @@ test:
 
 bench:
 	@echo ">> running benchmarks"
-	@$(GO) test $(pkgs) -bench=-
+	@$(GO) test $(pkgs) -bench=.
 
 vtest:
 	@echo ">> running verbose tests"
