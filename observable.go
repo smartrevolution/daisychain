@@ -98,7 +98,7 @@ func FlatMap(flatmapfn FlatMapFunc) Operator {
 	return OperatorFunc(func(obs Observer, cur, last Event) Event {
 		var next Event
 		o := flatmapfn(cur)
-		SubscribeAndWait(o, func(ev Event) {
+		Subscribe(o, func(ev Event) {
 			next = ev
 			obs.Next(next)
 		}, nil, nil)
