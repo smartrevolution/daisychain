@@ -165,6 +165,42 @@ func Filter(filterfn FilterFunc) Operator {
 	}, "Filter()", nil, true)
 }
 
+// Collect collects all events until Complete and the returns an Event
+// that can be cast to []Event containing all collected events.
+func Collect() Operator {
+	var events []Event
+	return OperatorFunc(func(obs Observer, cur, _ Event) Event {
+		if IsCompleteEvent(cur) || IsErrorEvent(cur) {
+			obs.Next(events)
+			obs.Next(cur)
+
+		} else {
+			events = append(events, cur)
+		}
+		return cur
+	}, "Collect()", nil, false)
+}
+
+type KeyFunc func(ev Event) string
+
+// GroupBy collects all events until Complete and the returns an Event
+// that can be cast to map[string][]Event containing all collected events
+// grouped by the result of KeyFunc.
+func GroupBy(keyfn KeyFunc) Operator {
+	events := make(map[string][]Event)
+	return OperatorFunc(func(obs Observer, cur, _ Event) Event {
+		if IsCompleteEvent(cur) || IsErrorEvent(cur) {
+			obs.Next(events)
+			obs.Next(cur)
+
+		} else {
+			key := keyfn(cur)
+			events[key] = append(events[key], cur)
+		}
+		return cur
+	}, "GroupBy()", nil, false)
+}
+
 type DebugFunc func(obs Observer, cur, last Event)
 
 func Debug(debugfn DebugFunc) Operator {
@@ -278,5 +314,14 @@ func Just(evts ...Event) Observable {
 			obs.Next(ev)
 		}
 		obs.Next(Complete())
+	})
+}
+
+func From(evts ...Event) Observable {
+	return ObservableFunc(func(obs Observer) {
+		for _, ev := range evts {
+			TRACE("From", ev)
+			obs.Next(ev)
+		}
 	})
 }

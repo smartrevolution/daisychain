@@ -222,6 +222,37 @@ func TestTake(t *testing.T) {
 	})
 }
 
+func TestCollect(t *testing.T) {
+	debug(t)
+	o := Create(
+		Just(1, 2, 3, 4, 5),
+		Collect(),
+	)
+	SubscribeAndWait(o, print(t, "Next"), print(t, "Error"), func(ev Event) {
+		if n, ok := ev.([]Event); !(ok && len(n) == 5) {
+			t.Error("Expected: 5, Got:", n)
+		}
+	})
+}
+
+func TestGroupBy(t *testing.T) {
+	debug(t)
+	o := Create(
+		Just(1, 2, 3, 4, 5),
+		GroupBy(func(ev Event) string {
+			if ev.(int)%2 == 0 {
+				return "even"
+			}
+			return "odd"
+		}),
+	)
+	SubscribeAndWait(o, print(t, "Next"), print(t, "Error"), func(ev Event) {
+		if n, ok := ev.(map[string][]Event); !(ok && len(n) == 2) {
+			t.Error("Expected: 2, Got:", n)
+		}
+	})
+}
+
 func TestAll(t *testing.T) {
 	debug(t)
 	o := Create(
