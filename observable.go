@@ -201,6 +201,32 @@ func GroupBy(keyfn KeyFunc) Operator {
 	}, "GroupBy()", nil, false)
 }
 
+func Distinct(keyfn KeyFunc) Operator {
+	seen := make(map[string]struct{})
+	return OperatorFunc(func(obs Observer, cur, last Event) Event {
+		key := keyfn(cur)
+		if _, exists := seen[key]; !exists {
+			obs.Next(cur)
+			seen[key] = struct{}{}
+		}
+		return cur
+	}, "Distinct()", nil, true)
+}
+
+func Count() Operator {
+	var counter int64
+	return OperatorFunc(func(obs Observer, cur, _ Event) Event {
+		if IsCompleteEvent(cur) || IsErrorEvent(cur) {
+			obs.Next(counter)
+			obs.Next(cur)
+
+		} else {
+			counter++
+		}
+		return cur
+	}, "Count()", nil, false)
+}
+
 type DebugFunc func(obs Observer, cur, last Event)
 
 func Debug(debugfn DebugFunc) Operator {

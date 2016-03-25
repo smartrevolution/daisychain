@@ -253,6 +253,23 @@ func TestGroupBy(t *testing.T) {
 	})
 }
 
+func TestDistinctAndCount(t *testing.T) {
+	debug(t)
+	o := Create(
+		Just("a", "b", "a", "b", "c"),
+		Distinct(func(ev Event) string {
+			return ev.(string)
+		}),
+		Count(),
+	)
+
+	SubscribeAndWait(o, print(t, "Next"), print(t, "Error"), func(ev Event) {
+		if n, ok := ev.(int64); !(ok && n == 3) {
+			t.Error("Expected: 3, Got:", n)
+		}
+	})
+}
+
 func TestAll(t *testing.T) {
 	debug(t)
 	o := Create(
