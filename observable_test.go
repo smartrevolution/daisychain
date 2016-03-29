@@ -222,11 +222,11 @@ func TestTake(t *testing.T) {
 	})
 }
 
-func TestCollect(t *testing.T) {
+func TestToVector(t *testing.T) {
 	debug(t)
 	o := Create(
 		Just(1, 2, 3, 4, 5),
-		Collect(),
+		ToVector(),
 	)
 	SubscribeAndWait(o, print(t, "Next"), print(t, "Error"), func(ev Event) {
 		if n, ok := ev.([]Event); !(ok && len(n) == 5) {
@@ -235,11 +235,11 @@ func TestCollect(t *testing.T) {
 	})
 }
 
-func TestGroupBy(t *testing.T) {
+func TestToMap(t *testing.T) {
 	debug(t)
 	o := Create(
 		Just(1, 2, 3, 4, 5),
-		GroupBy(func(ev Event) string {
+		ToMap(func(ev Event) string {
 			if ev.(int)%2 == 0 {
 				return "even"
 			}

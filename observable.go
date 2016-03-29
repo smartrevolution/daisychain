@@ -165,9 +165,9 @@ func Filter(filterfn FilterFunc) Operator {
 	}, "Filter()", nil, true)
 }
 
-// Collect collects all events until Complete and the returns an Event
+// ToVector collects all events until Complete and the returns an Event
 // that can be cast to []Event containing all collected events.
-func Collect() Operator {
+func ToVector() Operator {
 	var events []Event
 	return OperatorFunc(func(obs Observer, cur, _ Event) Event {
 		if IsCompleteEvent(cur) || IsErrorEvent(cur) {
@@ -178,15 +178,15 @@ func Collect() Operator {
 			events = append(events, cur)
 		}
 		return cur
-	}, "Collect()", nil, false)
+	}, "ToVector()", nil, false)
 }
 
 type KeyFunc func(ev Event) string
 
-// GroupBy collects all events until Complete and the returns an Event
+// ToMap collects all events until Complete and the returns an Event
 // that can be cast to map[string][]Event containing all collected events
 // grouped by the result of KeyFunc.
-func GroupBy(keyfn KeyFunc) Operator {
+func ToMap(keyfn KeyFunc) Operator {
 	events := make(map[string][]Event)
 	return OperatorFunc(func(obs Observer, cur, _ Event) Event {
 		if IsCompleteEvent(cur) || IsErrorEvent(cur) {
@@ -198,9 +198,12 @@ func GroupBy(keyfn KeyFunc) Operator {
 			events[key] = append(events[key], cur)
 		}
 		return cur
-	}, "GroupBy()", nil, false)
+	}, "ToMap()", nil, false)
 }
 
+// Distinct emit each event only the first time it occurs based on the
+// result of KeyFunc. Two events are equal, if KeyFunc returns the same
+// result for them.
 func Distinct(keyfn KeyFunc) Operator {
 	seen := make(map[string]struct{})
 	return OperatorFunc(func(obs Observer, cur, last Event) Event {
