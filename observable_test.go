@@ -172,6 +172,7 @@ func TestScan(t *testing.T) {
 }
 
 func TestFlatMap(t *testing.T) {
+	debug(t)
 	o := Create(
 		Just(1, 2, 3, 4, 5),
 		FlatMap(func(ev Event) Observable {
@@ -294,14 +295,21 @@ func TestZip(t *testing.T) {
 			}
 			return sum
 		}, o1, o2),
-		Reduce(func(ev1, ev2 Event) Event {
+		Scan(func(ev1, ev2 Event) Event {
 			return ev1.(int) + ev2.(int)
 		}, 0),
 	)
+	expected := [3]int{15, 42, 81}
+	var got [3]int
+	var i int
 	SubscribeAndWait(o, func(ev Event) {
-		t.Log(ev)
+		got[i] = ev.(int)
+		i += 1
 	}, nil, nil)
 
+	if expected != got {
+		t.Errorf("Expected: %v, Got: %v", expected, got)
+	}
 }
 
 func TestAll(t *testing.T) {
@@ -361,6 +369,16 @@ func TestSubscribe(t *testing.T) {
 			t.Error("Expected: 33, Got:", n)
 		}
 	})
+}
+
+func TestJust(t *testing.T) {
+	debug(t)
+	o := Create(
+		Just(1, 2, 3),
+	)
+	SubscribeAndWait(o, func(ev Event) {
+		t.Log(ev)
+	}, nil, nil)
 }
 
 func TestComposition(t *testing.T) {
