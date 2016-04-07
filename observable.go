@@ -108,15 +108,15 @@ func FlatMap(flatmapfn FlatMapFunc) Operator {
 
 type ReduceFunc func(left, right Event) Event
 
-func Reduce(reducefn ReduceFunc, init Event) Operator {
+func Scan(reducefn ReduceFunc, init Event) Operator {
 	return OperatorFunc(func(obs Observer, cur, last Event) Event {
 		next := reducefn(last, cur)
 		obs.Next(next)
 		return next
-	}, "Reduce()", init, true)
+	}, "Scan()", init, true)
 }
 
-func Scan(reducefn ReduceFunc, init Event) Operator {
+func Reduce(reducefn ReduceFunc, init Event) Operator {
 	return OperatorFunc(func(obs Observer, cur, last Event) Event {
 		var next Event
 		if IsCompleteEvent(cur) || IsErrorEvent(cur) {
@@ -127,7 +127,7 @@ func Scan(reducefn ReduceFunc, init Event) Operator {
 			next = reducefn(last, cur)
 		}
 		return next
-	}, "Scan()", init, false)
+	}, "Reduce()", init, false)
 }
 
 func Skip(n int) Operator {
@@ -228,6 +228,40 @@ func Count() Operator {
 		}
 		return cur
 	}, "Count()", nil, false)
+}
+
+type ZipFunc func(evs ...Event) Event
+
+// Zip works ONLY, if all event streams emit the same number of events
+func Zip(zipfunc ZipFunc, o ...Observable) Operator {
+	var receiver []chan Event
+	var onNext, onEnd func(ev Event)
+	for _, oo := range o {
+		output := make(chan Event)
+		onNext = func(ev Event) {
+			output <- ev
+		}
+		onEnd = func(ev Event) {
+			close(output)
+		}
+		receiver = append(receiver, output)
+		Subscribe(oo, onNext, onEnd, onEnd)
+	}
+
+	realize := func(receiver ...chan Event) []Event {
+		var result []Event
+		for _, r := range receiver {
+			result = append(result, func() Event { return <-r }())
+		}
+		return result
+	}
+	return OperatorFunc(func(obs Observer, cur, _ Event) Event {
+		head := []Event{cur}
+		tail := realize(receiver...)
+		args := append(head, tail...)
+		obs.Next(zipfunc(args...))
+		return cur
+	}, "Zip()", nil, true)
 }
 
 type DebugFunc func(obs Observer, cur, last Event)

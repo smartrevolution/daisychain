@@ -270,6 +270,40 @@ func TestDistinctAndCount(t *testing.T) {
 	})
 }
 
+func TestZip(t *testing.T) {
+	debug(t)
+	o1 := Create(
+		Just(1, 2, 3),
+		Map(func(ev Event) Event {
+			return ev
+		}),
+	)
+	o2 := Create(
+		Just(4, 5, 6),
+		Map(func(ev Event) Event {
+			return ev
+		}),
+	)
+
+	o := Create(
+		Just(10, 20, 30),
+		Zip(func(evs ...Event) Event {
+			var sum int
+			for _, ev := range evs {
+				sum += ev.(int)
+			}
+			return sum
+		}, o1, o2),
+		Reduce(func(ev1, ev2 Event) Event {
+			return ev1.(int) + ev2.(int)
+		}, 0),
+	)
+	SubscribeAndWait(o, func(ev Event) {
+		t.Log(ev)
+	}, nil, nil)
+
+}
+
 func TestAll(t *testing.T) {
 	debug(t)
 	o := Create(
