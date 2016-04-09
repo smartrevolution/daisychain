@@ -95,15 +95,29 @@ func Map(mapfn MapFunc) Operator {
 type FlatMapFunc func(ev Event) Observable
 
 func FlatMap(flatmapfn FlatMapFunc) Operator {
+	var wg sync.WaitGroup
 	return OperatorFunc(func(obs Observer, cur, last Event) Event {
 		var next Event
-		o := flatmapfn(cur)
-		Subscribe(o, func(ev Event) {
-			next = ev
-			obs.Next(next)
-		}, nil, nil)
+		if IsCompleteEvent(cur) || IsErrorEvent(cur) {
+			TRACE("FlatMap()", "WAITING...")
+			wg.Wait()
+			obs.Next(cur)
+		} else {
+			TRACE("FlatMap()", "SPAWNING")
+			wg.Add(1)
+			o := flatmapfn(cur)
+			onNext := func(ev Event) {
+				next = ev
+				obs.Next(next)
+			}
+			onEvent := func(ev Event) {
+				TRACE("FlatMap()", "DONE")
+				wg.Done()
+			}
+			Subscribe(o, onNext, onEvent, onEvent)
+		}
 		return next
-	}, "FlatMap()", nil, true)
+	}, "FlatMap()", nil, false)
 }
 
 type ReduceFunc func(left, right Event) Event
