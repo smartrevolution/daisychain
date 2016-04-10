@@ -369,6 +369,27 @@ func SubscribeAndWait(o Observable, onNext, onError, onComplete ObserverFunc) {
 	wg.Wait()
 }
 
+func Cache(o Observable) Observable {
+	var evts []Event
+
+	oo := Create(
+		o,
+		ToVector(),
+	)
+	onComplete := func(ev Event) {
+		evts = ev.([]Event)
+	}
+
+	SubscribeAndWait(oo, nil, nil, onComplete)
+
+	return ObservableFunc(func(obs Observer) {
+		for _, ev := range evts {
+			obs.Next(ev)
+		}
+		obs.Next(Complete())
+	})
+}
+
 func build(o Observable, ops ...Operator) Observable {
 	var chained Observable = o
 
