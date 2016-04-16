@@ -294,6 +294,7 @@ func OperatorFunc(do BodyFunc, name string, init Event, shouldFilter bool) Opera
 	return func(o Observable) Observable {
 		return ObservableFunc(func(obs Observer) {
 			input := make(chan Event, 10)
+			TRACE("Opening channel", input)
 			go func() {
 				last := init
 				TRACE("Starting", name)
@@ -311,6 +312,7 @@ func OperatorFunc(do BodyFunc, name string, init Event, shouldFilter bool) Opera
 			o.Observe(ObserverFunc(func(ev Event) {
 				input <- ev
 				if IsCompleteEvent(ev) || IsErrorEvent(ev) {
+					TRACE("Closing channel", input)
 					close(input)
 				}
 			}))

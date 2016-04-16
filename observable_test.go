@@ -42,6 +42,29 @@ var testNumbers []Event = []Event{0, 1, 2, 3, 4, 5}
 var testStrings []Event = []Event{"a", "b", "c", "d", "e", "f"}
 var testObjects []Event = []Event{obj{0}, obj{1}, obj{2}}
 
+func TestAnon(t *testing.T) {
+	var item struct {
+		foo string
+		bar string
+	}
+	o := Create(
+		ObservableFunc(func(obs Observer) {
+			item.foo = "foo"
+			item.bar = "bar"
+			obs.Next(item)
+			obs.Next(Complete())
+		}),
+	)
+	SubscribeAndWait(o, nil, nil, func(ev Event) {
+		if s, ok := ev.(struct {
+			foo string
+			bar string
+		}); !ok {
+			t.Errorf("Expected: %#v, Got: %#v (%T)", ev, s, s)
+		}
+	})
+}
+
 func TestMap(t *testing.T) {
 	debug(t)
 
@@ -335,6 +358,15 @@ func TestAll(t *testing.T) {
 
 	SubscribeAndWait(o, print(t, "Next"), print(t, "Error"), print(t, "Completed"))
 }
+
+// func TestCleanup(t *testing.T) {
+// 	var cnt
+// 	o := Create(
+// 		ObservableFunc(func(obs Observer) {
+
+// 		}),
+// 	)
+// }
 
 func TestCreate(t *testing.T) {
 	debug(t)
