@@ -65,6 +65,14 @@ func TestAnon(t *testing.T) {
 	})
 }
 
+func TestEmpty(t *testing.T) {
+	SubscribeAndWait(Empty(), nil, nil, func(ev Event) {
+		if ev != nil {
+			t.Error("Expected: nil, Got:", ev)
+		}
+	})
+}
+
 func TestMap(t *testing.T) {
 	debug(t)
 

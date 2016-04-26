@@ -425,3 +425,9 @@ func From(evts ...Event) Observable {
 		}
 	})
 }
+
+func Empty() Observable {
+	return ObservableFunc(func(obs Observer) {
+		obs.Next(Complete())
+	})
+}
