@@ -179,6 +179,20 @@ func Filter(filterfn FilterFunc) Operator {
 	}, "Filter()", nil, true)
 }
 
+func Filter1(filterfn FilterFunc) Operator {
+	return OperatorFunc(func(obs Observer, cur, last Event) Event {
+		if IsCompleteEvent(cur) || IsErrorEvent(cur) {
+			obs.Next(cur)
+
+		} else {
+			if ok := filterfn(cur); ok {
+				obs.Next(cur)
+			}
+		}
+		return cur
+	}, "Filter1()", nil, false)
+}
+
 // ToVector collects all events until Complete and the returns an Event
 // that can be cast to []Event containing all collected events.
 func ToVector() Operator {
