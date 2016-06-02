@@ -84,12 +84,26 @@ type Operator func(Observable) Observable
 
 type MapFunc func(Event) Event
 
+// func Map(mapfn MapFunc) Operator {
+// 	return OperatorFunc(func(obs Observer, cur, last Event) Event {
+// 		next := mapfn(cur)
+// 		obs.Next(next)
+// 		return next
+// 	}, "Map()", nil, true)
+// }
+
 func Map(mapfn MapFunc) Operator {
 	return OperatorFunc(func(obs Observer, cur, last Event) Event {
-		next := mapfn(cur)
-		obs.Next(next)
+		var next Event
+		if IsCompleteEvent(cur) || IsErrorEvent(cur) {
+			obs.Next(cur)
+
+		} else {
+			next = mapfn(cur)
+			obs.Next(next)
+		}
 		return next
-	}, "Map()", nil, true)
+	}, "Map()", nil, false)
 }
 
 type FlatMapFunc func(ev Event) Observable
@@ -124,10 +138,16 @@ type ReduceFunc func(left, right Event) Event
 
 func Scan(reducefn ReduceFunc, init Event) Operator {
 	return OperatorFunc(func(obs Observer, cur, last Event) Event {
-		next := reducefn(last, cur)
-		obs.Next(next)
+		var next Event
+		if IsCompleteEvent(cur) || IsErrorEvent(cur) {
+			obs.Next(cur)
+
+		} else {
+			next = reducefn(last, cur)
+			obs.Next(next)
+		}
 		return next
-	}, "Scan()", init, true)
+	}, "Scan()", init, false)
 }
 
 func Reduce(reducefn ReduceFunc, init Event) Operator {
@@ -147,39 +167,49 @@ func Reduce(reducefn ReduceFunc, init Event) Operator {
 func Skip(n int) Operator {
 	var count int
 	return OperatorFunc(func(obs Observer, cur, last Event) Event {
-		if count == n {
+		if IsCompleteEvent(cur) || IsErrorEvent(cur) {
 			obs.Next(cur)
 
 		} else {
-			count += 1
+			if count == n {
+				obs.Next(cur)
+
+			} else {
+				count += 1
+			}
 		}
 		return cur
-	}, "Skip()", nil, true)
+	}, "Skip()", nil, false)
 }
 
 func Take(n int) Operator {
 	var count int
 	return OperatorFunc(func(obs Observer, cur, last Event) Event {
-		if count < n {
+		if IsCompleteEvent(cur) || IsErrorEvent(cur) {
 			obs.Next(cur)
-			count += 1
+
+		} else {
+			if count < n {
+				obs.Next(cur)
+				count += 1
+			}
 		}
 		return cur
-	}, "Take()", nil, true)
+	}, "Take()", nil, false)
 }
 
 type FilterFunc func(Event) bool
 
-func Filter(filterfn FilterFunc) Operator {
-	return OperatorFunc(func(obs Observer, cur, last Event) Event {
-		if ok := filterfn(cur); ok {
-			obs.Next(cur)
-		}
-		return cur
-	}, "Filter()", nil, true)
-}
+// func Filter(filterfn FilterFunc) Operator {
+// 	return OperatorFunc(func(obs Observer, cur, last Event) Event {
+// 		if ok := filterfn(cur); ok {
+// 			obs.Next(cur)
+// 		}
+// 		return cur
+// 	}, "Filter()", nil, true)
+// }
 
-func Filter1(filterfn FilterFunc) Operator {
+func Filter(filterfn FilterFunc) Operator {
 	return OperatorFunc(func(obs Observer, cur, last Event) Event {
 		if IsCompleteEvent(cur) || IsErrorEvent(cur) {
 			obs.Next(cur)
@@ -190,7 +220,7 @@ func Filter1(filterfn FilterFunc) Operator {
 			}
 		}
 		return cur
-	}, "Filter1()", nil, false)
+	}, "Filter()", nil, false)
 }
 
 // ToVector collects all events until Complete and the returns an Event
@@ -232,16 +262,36 @@ func ToMap(keyfn KeyFunc) Operator {
 // Distinct emit each event only the first time it occurs based on the
 // result of KeyFunc. Two events are equal, if KeyFunc returns the same
 // result for them.
+// func Distinct(keyfn KeyFunc) Operator {
+// 	seen := make(map[string]struct{})
+// 	return OperatorFunc(func(obs Observer, cur, last Event) Event {
+// 		key := keyfn(cur)
+// 		if _, exists := seen[key]; !exists {
+// 			obs.Next(cur)
+// 			seen[key] = struct{}{}
+// 		}
+// 		return cur
+// 	}, "Distinct()", nil, true)
+// }
+
+// Distinct emit each event only the first time it occurs based on the
+// result of KeyFunc. Two events are equal, if KeyFunc returns the same
+// result for them.
 func Distinct(keyfn KeyFunc) Operator {
 	seen := make(map[string]struct{})
 	return OperatorFunc(func(obs Observer, cur, last Event) Event {
-		key := keyfn(cur)
-		if _, exists := seen[key]; !exists {
+		if IsCompleteEvent(cur) || IsErrorEvent(cur) {
 			obs.Next(cur)
-			seen[key] = struct{}{}
+
+		} else {
+			key := keyfn(cur)
+			if _, exists := seen[key]; !exists {
+				obs.Next(cur)
+				seen[key] = struct{}{}
+			}
 		}
 		return cur
-	}, "Distinct()", nil, true)
+	}, "Distinct()", nil, false)
 }
 
 func Count() Operator {
@@ -299,7 +349,7 @@ func Debug(debugfn DebugFunc) Operator {
 		debugfn(obs, cur, last)
 		obs.Next(cur)
 		return cur
-	}, "DEBUG()", nil, true)
+	}, "DEBUG()", nil, false)
 }
 
 type BodyFunc func(obs Observer, cur, last Event) Event
