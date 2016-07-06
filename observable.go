@@ -84,14 +84,6 @@ type Operator func(Observable) Observable
 
 type MapFunc func(Event) Event
 
-// func Map(mapfn MapFunc) Operator {
-// 	return OperatorFunc(func(obs Observer, cur, last Event) Event {
-// 		next := mapfn(cur)
-// 		obs.Next(next)
-// 		return next
-// 	}, "Map()", nil, true)
-// }
-
 func Map(mapfn MapFunc) Operator {
 	return OperatorFunc(func(obs Observer, cur, last Event) Event {
 		var next Event
@@ -103,7 +95,7 @@ func Map(mapfn MapFunc) Operator {
 			obs.Next(next)
 		}
 		return next
-	}, "Map()", nil, false)
+	}, "Map()", nil)
 }
 
 type FlatMapFunc func(ev Event) Observable
@@ -131,7 +123,7 @@ func FlatMap(flatmapfn FlatMapFunc) Operator {
 			Subscribe(o, onNext, onEvent, onEvent)
 		}
 		return next
-	}, "FlatMap()", nil, false)
+	}, "FlatMap()", nil)
 }
 
 type ReduceFunc func(left, right Event) Event
@@ -140,6 +132,7 @@ func Scan(reducefn ReduceFunc, init Event) Operator {
 	return OperatorFunc(func(obs Observer, cur, last Event) Event {
 		var next Event
 		if IsCompleteEvent(cur) || IsErrorEvent(cur) {
+			//FIXME(SR): Post last event?!
 			obs.Next(cur)
 
 		} else {
@@ -147,7 +140,7 @@ func Scan(reducefn ReduceFunc, init Event) Operator {
 			obs.Next(next)
 		}
 		return next
-	}, "Scan()", init, false)
+	}, "Scan()", init)
 }
 
 func Reduce(reducefn ReduceFunc, init Event) Operator {
@@ -161,7 +154,7 @@ func Reduce(reducefn ReduceFunc, init Event) Operator {
 			next = reducefn(last, cur)
 		}
 		return next
-	}, "Reduce()", init, false)
+	}, "Reduce()", init)
 }
 
 func Skip(n int) Operator {
@@ -179,7 +172,7 @@ func Skip(n int) Operator {
 			}
 		}
 		return cur
-	}, "Skip()", nil, false)
+	}, "Skip()", nil)
 }
 
 func Take(n int) Operator {
@@ -195,19 +188,10 @@ func Take(n int) Operator {
 			}
 		}
 		return cur
-	}, "Take()", nil, false)
+	}, "Take()", nil)
 }
 
 type FilterFunc func(Event) bool
-
-// func Filter(filterfn FilterFunc) Operator {
-// 	return OperatorFunc(func(obs Observer, cur, last Event) Event {
-// 		if ok := filterfn(cur); ok {
-// 			obs.Next(cur)
-// 		}
-// 		return cur
-// 	}, "Filter()", nil, true)
-// }
 
 func Filter(filterfn FilterFunc) Operator {
 	return OperatorFunc(func(obs Observer, cur, last Event) Event {
@@ -220,7 +204,7 @@ func Filter(filterfn FilterFunc) Operator {
 			}
 		}
 		return cur
-	}, "Filter()", nil, false)
+	}, "Filter()", nil)
 }
 
 // ToVector collects all events until Complete and the returns an Event
@@ -236,7 +220,7 @@ func ToVector() Operator {
 			events = append(events, cur)
 		}
 		return cur
-	}, "ToVector()", nil, false)
+	}, "ToVector()", nil)
 }
 
 type KeyFunc func(ev Event) string
@@ -256,25 +240,10 @@ func ToMap(keyfn KeyFunc) Operator {
 			events[key] = append(events[key], cur)
 		}
 		return cur
-	}, "ToMap()", nil, false)
+	}, "ToMap()", nil)
 }
 
-// Distinct emit each event only the first time it occurs based on the
-// result of KeyFunc. Two events are equal, if KeyFunc returns the same
-// result for them.
-// func Distinct(keyfn KeyFunc) Operator {
-// 	seen := make(map[string]struct{})
-// 	return OperatorFunc(func(obs Observer, cur, last Event) Event {
-// 		key := keyfn(cur)
-// 		if _, exists := seen[key]; !exists {
-// 			obs.Next(cur)
-// 			seen[key] = struct{}{}
-// 		}
-// 		return cur
-// 	}, "Distinct()", nil, true)
-// }
-
-// Distinct emit each event only the first time it occurs based on the
+// Distinct emits each event only the first time it occurs based on the
 // result of KeyFunc. Two events are equal, if KeyFunc returns the same
 // result for them.
 func Distinct(keyfn KeyFunc) Operator {
@@ -291,7 +260,7 @@ func Distinct(keyfn KeyFunc) Operator {
 			}
 		}
 		return cur
-	}, "Distinct()", nil, false)
+	}, "Distinct()", nil)
 }
 
 func Count() Operator {
@@ -305,25 +274,26 @@ func Count() Operator {
 			counter++
 		}
 		return cur
-	}, "Count()", nil, false)
+	}, "Count()", nil)
 }
 
 type ZipFunc func(evs ...Event) Event
 
 // Zip works ONLY, if all event streams emit the same number of events
-func Zip(zipfunc ZipFunc, o ...Observable) Operator {
+func Zip(zipfunc ZipFunc, oo ...Observable) Operator {
 	var receiver []chan Event
 	var onNext, onEnd func(ev Event)
-	for _, oo := range o {
+	for _, o := range oo {
 		output := make(chan Event)
 		onNext = func(ev Event) {
 			output <- ev
 		}
 		onEnd = func(ev Event) {
+			//output <- ev //FIXME(SR): Always post last ev?
 			close(output)
 		}
 		receiver = append(receiver, output)
-		Subscribe(oo, onNext, onEnd, onEnd)
+		Subscribe(o, onNext, onEnd, onEnd)
 	}
 
 	realize := func(receiver ...chan Event) []Event {
@@ -337,9 +307,15 @@ func Zip(zipfunc ZipFunc, o ...Observable) Operator {
 		head := []Event{cur}
 		tail := realize(receiver...)
 		args := append(head, tail...)
+		for _, a := range args {
+			if IsCompleteEvent(a) || IsErrorEvent(a) {
+				obs.Next(Complete())
+				return cur
+			}
+		}
 		obs.Next(zipfunc(args...))
 		return cur
-	}, "Zip()", nil, true)
+	}, "Zip()", nil)
 }
 
 type DebugFunc func(obs Observer, cur, last Event)
@@ -349,27 +325,24 @@ func Debug(debugfn DebugFunc) Operator {
 		debugfn(obs, cur, last)
 		obs.Next(cur)
 		return cur
-	}, "DEBUG()", nil, false)
+	}, "DEBUG()", nil)
 }
 
 type BodyFunc func(obs Observer, cur, last Event) Event
 
-func OperatorFunc(do BodyFunc, name string, init Event, shouldFilter bool) Operator {
+func OperatorFunc(do BodyFunc, name string, init Event) Operator {
 	return func(o Observable) Observable {
 		return ObservableFunc(func(obs Observer) {
 			input := make(chan Event, 10)
+			//FIXME(SR): Buffering is needed to make Zip() work...
+			//input := make(chan Event)
 			TRACE("Opening channel", input)
 			go func() {
 				last := init
 				TRACE("Starting", name)
 				for ev := range input {
-					if shouldFilter && (IsCompleteEvent(ev) || IsErrorEvent(ev)) {
-						TRACE(name, ev)
-						obs.Next(ev)
-					} else {
-						last = do(obs, ev, last)
-						TRACE(name, last)
-					}
+					last = do(obs, ev, last)
+					TRACE(name, last)
 				}
 				TRACE("Closing", name)
 			}()

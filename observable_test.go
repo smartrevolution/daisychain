@@ -2,6 +2,7 @@ package daisychain
 
 import (
 	"flag"
+	"math/rand"
 	"testing"
 	"time"
 )
@@ -41,6 +42,44 @@ var testNils []Event = []Event{nil, nil, nil}
 var testNumbers []Event = []Event{0, 1, 2, 3, 4, 5}
 var testStrings []Event = []Event{"a", "b", "c", "d", "e", "f"}
 var testObjects []Event = []Event{obj{0}, obj{1}, obj{2}}
+
+func TestStresstest(t *testing.T) {
+	t.Skip("Slow test...")
+	randMillies := func() int { return rand.Intn(10) }
+	ints := make(chan int)
+	go func() {
+		for i := 0; i < 1000; i++ {
+			ints <- i
+		}
+		close(ints)
+	}()
+	o := Create(
+		ObservableFunc(func(obs Observer) {
+			for i := range ints {
+				obs.Next(i)
+			}
+			obs.Next(Complete())
+		}),
+		Map(func(ev Event) Event {
+			time.Sleep(time.Duration(randMillies() * int(time.Millisecond)))
+			return ev
+		}),
+		Scan(func(left, right Event) Event {
+			time.Sleep(time.Duration(randMillies() * int(time.Millisecond)))
+			return left.(int) + 1
+		}, 0),
+		FlatMap(func(ev Event) Observable {
+			return Just(ev)
+		}),
+		Reduce(func(left, right Event) Event {
+			time.Sleep(time.Duration(randMillies() * int(time.Millisecond)))
+			return left.(int) + 1
+		}, 0),
+	)
+	SubscribeAndWait(o, nil, nil, func(ev Event) {
+		t.Log(ev.(int))
+	})
+}
 
 func TestAnon(t *testing.T) {
 	var item struct {
@@ -302,6 +341,44 @@ func TestDistinctAndCount(t *testing.T) {
 	})
 }
 
+func TestMapInternals(t *testing.T) {
+	input := ObservableFunc(func(obs Observer) {
+		obs.Next(1)
+		obs.Next(2)
+		obs.Next(3)
+		obs.Next(Complete())
+	})
+
+	mapOp := Map(func(ev Event) Event {
+		return ev.(int) * 10
+	})
+
+	output := mapOp(input)
+
+	SubscribeAndWait(output, func(ev Event) {
+		t.Log(ev)
+	}, nil, nil)
+}
+
+func TestZipInternals(t *testing.T) {
+	input := ObservableFunc(func(obs Observer) {
+		obs.Next(1)
+		obs.Next(2)
+		obs.Next(3)
+		obs.Next(Complete())
+	})
+
+	zipOp := Zip(func(evs ...Event) Event {
+		return evs[0].(int)
+	})
+
+	output := zipOp(input)
+
+	SubscribeAndWait(output, func(ev Event) {
+		t.Log(ev)
+	}, nil, nil)
+}
+
 func TestZip(t *testing.T) {
 	debug(t)
 	o1 := Create(
@@ -332,14 +409,20 @@ func TestZip(t *testing.T) {
 	)
 	expected := [3]int{15, 42, 81}
 	var got [3]int
+	var gotLast int
 	var i int
 	SubscribeAndWait(o, func(ev Event) {
 		got[i] = ev.(int)
 		i += 1
-	}, nil, nil)
+	}, nil, func(ev Event) {
+		gotLast = ev.(int)
+	})
 
 	if expected != got {
 		t.Errorf("Expected: %v, Got: %v", expected, got)
+	}
+	if expected[len(expected)-1] != gotLast {
+		t.Errorf("Expected: %v, Got: %v", expected[len(expected)-1], gotLast)
 	}
 }
 
@@ -366,15 +449,6 @@ func TestAll(t *testing.T) {
 
 	SubscribeAndWait(o, print(t, "Next"), print(t, "Error"), print(t, "Completed"))
 }
-
-// func TestCleanup(t *testing.T) {
-// 	var cnt
-// 	o := Create(
-// 		ObservableFunc(func(obs Observer) {
-
-// 		}),
-// 	)
-// }
 
 func TestCreate(t *testing.T) {
 	debug(t)
