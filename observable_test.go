@@ -43,9 +43,16 @@ var testNumbers []Event = []Event{0, 1, 2, 3, 4, 5}
 var testStrings []Event = []Event{"a", "b", "c", "d", "e", "f"}
 var testObjects []Event = []Event{obj{0}, obj{1}, obj{2}}
 
+func randMillies() int {
+	return rand.Intn(10)
+}
+
+func randSleep() {
+	time.Sleep(time.Duration(randMillies() * int(time.Millisecond)))
+}
+
 func TestStresstest(t *testing.T) {
-	t.Skip("Slow test...")
-	randMillies := func() int { return rand.Intn(10) }
+	//t.Skip("Slow test...")
 	ints := make(chan int)
 	go func() {
 		for i := 0; i < 1000; i++ {
@@ -61,18 +68,18 @@ func TestStresstest(t *testing.T) {
 			obs.Next(Complete())
 		}),
 		Map(func(ev Event) Event {
-			time.Sleep(time.Duration(randMillies() * int(time.Millisecond)))
+			randSleep()
 			return ev
 		}),
 		Scan(func(left, right Event) Event {
-			time.Sleep(time.Duration(randMillies() * int(time.Millisecond)))
+			randSleep()
 			return left.(int) + 1
 		}, 0),
 		FlatMap(func(ev Event) Observable {
 			return Just(ev)
 		}),
 		Reduce(func(left, right Event) Event {
-			time.Sleep(time.Duration(randMillies() * int(time.Millisecond)))
+			randSleep()
 			return left.(int) + 1
 		}, 0),
 	)
@@ -246,6 +253,7 @@ func TestFlatMap(t *testing.T) {
 	o := Create(
 		Just(1, 2, 3, 4, 5),
 		FlatMap(func(ev Event) Observable {
+			randSleep()
 			return Create(
 				Just(ev, ev),
 			)
