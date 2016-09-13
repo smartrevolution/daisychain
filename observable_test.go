@@ -52,7 +52,7 @@ func randSleep() {
 }
 
 func TestStresstest(t *testing.T) {
-	//t.Skip("Slow test...")
+	t.Skip("Slow test...")
 	ints := make(chan int)
 	go func() {
 		for i := 0; i < 1000; i++ {

@@ -132,7 +132,6 @@ func Scan(reducefn ReduceFunc, init Event) Operator {
 	return OperatorFunc(func(obs Observer, cur, last Event) Event {
 		var next Event
 		if IsCompleteEvent(cur) || IsErrorEvent(cur) {
-			//FIXME(SR): Post last event?!
 			obs.Next(cur)
 
 		} else {
@@ -336,7 +335,8 @@ func OperatorFunc(do BodyFunc, name string, init Event) Operator {
 			input := make(chan Event, 10)
 			//FIXME(SR): Buffering is needed to make Zip() work...
 			//input := make(chan Event)
-			TRACE("Opening channel", input)
+			msg := fmt.Sprintf("Opening channel for %s", name)
+			TRACE(msg, input)
 			go func() {
 				last := init
 				TRACE("Starting", name)
@@ -347,8 +347,10 @@ func OperatorFunc(do BodyFunc, name string, init Event) Operator {
 				TRACE("Closing", name)
 			}()
 			o.Observe(ObserverFunc(func(ev Event) {
+				TRACE("EVENT", ev)
 				input <- ev
-				if IsCompleteEvent(ev) || IsErrorEvent(ev) {
+				//if IsCompleteEvent(ev) || IsErrorEvent(ev) {
+				if IsCompleteEvent(ev) { //FIXME(SR): Is there always a complete after an error?
 					TRACE("Closing channel", input)
 					close(input)
 				}
@@ -422,6 +424,7 @@ func Cache(o Observable) Observable {
 	SubscribeAndWait(oo, nil, nil, onComplete)
 
 	return ObservableFunc(func(obs Observer) {
+		evts := evts
 		for _, ev := range evts {
 			obs.Next(ev)
 		}
