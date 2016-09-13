@@ -1,6 +1,7 @@
 package daisychain
 
 import (
+	"context"
 	"fmt"
 	"sync"
 	"time"
@@ -80,7 +81,7 @@ func (o ObserverFunc) Next(ev Event) {
 	o(ev)
 }
 
-type Operator func(Observable) Observable
+type Operator func(CancelableObservable) Observable
 
 type MapFunc func(Event) Event
 
@@ -330,7 +331,7 @@ func Debug(debugfn DebugFunc) Operator {
 type BodyFunc func(obs Observer, cur, last Event) Event
 
 func OperatorFunc(do BodyFunc, name string, init Event) Operator {
-	return func(o Observable) Observable {
+	return func(o CancelableObservable) Observable {
 		return ObservableFunc(func(obs Observer) {
 			input := make(chan Event, 10)
 			//FIXME(SR): Buffering is needed to make Zip() work...
@@ -340,20 +341,20 @@ func OperatorFunc(do BodyFunc, name string, init Event) Operator {
 			go func() {
 				last := init
 				TRACE("Starting", name)
-				for ev := range input {
-					last = do(obs, ev, last)
-					TRACE(name, last)
+				for {
+					select {
+					case <-o.Done():
+						break
+					case ev := <-input:
+						last = do(obs, ev, last)
+						TRACE(name, last)
+					}
+					TRACE("Closing", name)
 				}
-				TRACE("Closing", name)
 			}()
-			o.Observe(ObserverFunc(func(ev Event) {
+			o.(Observable).Observe(ObserverFunc(func(ev Event) {
 				TRACE("EVENT", ev)
 				input <- ev
-				//if IsCompleteEvent(ev) || IsErrorEvent(ev) {
-				if IsCompleteEvent(ev) { //FIXME(SR): Is there always a complete after an error?
-					TRACE("Closing channel", input)
-					close(input)
-				}
 			}))
 		})
 	}
@@ -379,8 +380,10 @@ func Subscribe(o Observable, onNext, onError, onComplete ObserverFunc) {
 		switch ev.(type) {
 		case CompleteEvent:
 			callIfNotNil(onComplete, last)
+			o.(CancelableObservable).Cancel()
 		case ErrorEvent:
 			callIfNotNil(onError, ev)
+			o.(CancelableObservable).Cancel()
 		default:
 			last = ev
 			callIfNotNil(onNext, ev)
@@ -432,14 +435,32 @@ func Cache(o Observable) Observable {
 	})
 }
 
+type CancelableObservable interface {
+	Cancel()
+	Done() <-chan struct{}
+}
+
+type cancelableObservable struct {
+	Observable
+	context.Context
+	cancel context.CancelFunc
+}
+
+func (co cancelableObservable) Cancel() {
+	co.cancel()
+}
+
 func build(o Observable, ops ...Operator) Observable {
-	var chained Observable = o
+	ctx, cancel := context.WithCancel(context.Background())
+	var chained CancelableObservable = cancelableObservable{o, ctx, cancel}
 
+	nextCtx, _ := context.WithCancel(ctx)
 	for _, op := range ops {
-		chained = op(chained)
+		var nextObservable Observable = op(chained)
+		chained = cancelableObservable{nextObservable, nextCtx, cancel}
+		nextCtx, _ = context.WithCancel(nextCtx)
 	}
-	return chained
-
+	return chained.(Observable)
 }
 
 func Create(o Observable, ops ...Operator) Observable {

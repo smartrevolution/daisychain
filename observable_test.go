@@ -349,7 +349,7 @@ func TestDistinctAndCount(t *testing.T) {
 	})
 }
 
-func TestMapInternals(t *testing.T) {
+func xTestMapInternals(t *testing.T) {
 	input := ObservableFunc(func(obs Observer) {
 		obs.Next(1)
 		obs.Next(2)
@@ -361,14 +361,14 @@ func TestMapInternals(t *testing.T) {
 		return ev.(int) * 10
 	})
 
-	output := mapOp(input)
+	output := mapOp(cancelableObservable{input, nil, nil})
 
 	SubscribeAndWait(output, func(ev Event) {
 		t.Log(ev)
 	}, nil, nil)
 }
 
-func TestZipInternals(t *testing.T) {
+func xTestZipInternals(t *testing.T) {
 	input := ObservableFunc(func(obs Observer) {
 		obs.Next(1)
 		obs.Next(2)
@@ -380,7 +380,7 @@ func TestZipInternals(t *testing.T) {
 		return evs[0].(int)
 	})
 
-	output := zipOp(input)
+	output := zipOp(cancelableObservable{input, nil, nil})
 
 	SubscribeAndWait(output, func(ev Event) {
 		t.Log(ev)
