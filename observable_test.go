@@ -111,8 +111,56 @@ func TestAnon(t *testing.T) {
 	})
 }
 
+func xTestCancelLongLoop(t *testing.T) {
+	o := Create(
+		ObservableFunc(func(obs Observer) {
+			var i int
+			for i < 1000000000 {
+				i++
+				obs.Next(i)
+			}
+			obs.Next(Complete())
+		}),
+	)
+	Subscribe(o, nil, nil, nil)
+	time.Sleep(3 * time.Millisecond)
+	o.(CancelableObservable).Cancel()
+}
+
+func TestCancelCompleteAndError(t *testing.T) {
+	o := Create(
+		ObservableFunc(func(obs Observer) {
+			obs.Next(Error("foo"))
+			obs.Next(Complete())
+			obs.Next(Error("foo"))
+			obs.Next(Complete())
+		}),
+	)
+	Subscribe(o, func(ev Event) {
+		o.(CancelableObservable).Cancel()
+	}, nil, nil)
+}
+
 func TestEmpty(t *testing.T) {
+	SubscribeAndWait(Just(), nil, nil, func(ev Event) {
+		if ev != nil {
+			t.Error("Expected: nil, Got:", ev)
+		}
+	})
+
 	SubscribeAndWait(Empty(), nil, nil, func(ev Event) {
+		if ev != nil {
+			t.Error("Expected: nil, Got:", ev)
+		}
+	})
+
+	o := Create(
+		Just(),
+		Map(func(ev Event) Event {
+			return ev
+		}),
+	)
+	SubscribeAndWait(o, nil, nil, func(ev Event) {
 		if ev != nil {
 			t.Error("Expected: nil, Got:", ev)
 		}
