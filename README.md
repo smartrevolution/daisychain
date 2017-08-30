@@ -1,5 +1,6 @@
 # A very thin functional reactive programming layer over Go's CSP primitives
 
+Disclaimer: I just wanted to write an Rx-Layer for Go. I don't think that you need an abstraction like this in Go code. Even though I tried to make it as idiomatic as possible. I still think, that the implementation is interesting (to read), but if you want to use or extend this code, you are on your own. No bugfixes or pull requests. Use at your own risk.
 
 ```go
 package daisychain
